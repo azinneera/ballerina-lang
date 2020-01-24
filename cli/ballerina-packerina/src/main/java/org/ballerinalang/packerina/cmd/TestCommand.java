@@ -126,6 +126,9 @@ public class TestCommand implements BLauncherCmd {
     @CommandLine.Option(names = "--experimental", description = "Enable experimental language features.")
     private boolean experimentalFlag;
 
+    @CommandLine.Option(names = {"--code-coverage", "-cc"}, hidden = true)
+    private boolean coverage;
+
     // --debug flag is handled by ballerina.sh/ballerina.bat. It will launch ballerina with java debug options.
     @CommandLine.Option(names = "--debug", description = "start Ballerina in remote debugging mode")
     private String debugPort;

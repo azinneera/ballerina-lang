@@ -155,6 +155,9 @@ public class BuildCommand implements BLauncherCmd {
     @CommandLine.Option(names = "--experimental", description = "Enable experimental language features.")
     private boolean experimentalFlag;
 
+    @CommandLine.Option(names = {"--code-coverage", "-cc"}, hidden = true)
+    private boolean coverage;
+
     private static final String buildCmd = "ballerina build [-o <output>] [--sourceroot] [--offline] [--skip-tests]\n" +
             "                    [--skip-lock] {<ballerina-file | module-name> | -a | --all} [--] [(--key=value)...]";
 
