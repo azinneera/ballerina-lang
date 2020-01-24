@@ -20,6 +20,8 @@ package org.ballerinalang.packerina.task;
 
 import com.google.gson.Gson;
 import org.ballerinalang.packerina.OsUtils;
+import org.ballerinalang.coverage.ExecutionCoverageBuilder;
+import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.packerina.buildcontext.BuildContext;
 import org.ballerinalang.packerina.buildcontext.BuildContextField;
 import org.ballerinalang.packerina.model.ExecutableJar;
@@ -54,6 +56,11 @@ import static org.wso2.ballerinalang.compiler.util.ProjectDirConstants.BLANG_COM
  * @since 1.1.0
  */
 public class RunTestsTask implements Task {
+    private boolean generateCoverage;
+
+    public RunTestsTask(boolean generateCoverage) {
+        this.generateCoverage = generateCoverage;
+    }
 
     private final String[] args;
 
@@ -78,6 +85,7 @@ public class RunTestsTask implements Task {
         buildContext.out().println();
         buildContext.out().println("Running Tests");
         Path sourceRootPath = buildContext.get(BuildContextField.SOURCE_ROOT);
+        Path targetDirPath = buildContext.get(BuildContextField.TARGET_DIR);
 
         List<BLangPackage> moduleBirMap = buildContext.getModules();
         //p Only tests in packages are executed so default packages i.e. single bal files which has the package name
@@ -149,6 +157,28 @@ public class RunTestsTask implements Task {
      */
     private static String getClassName(String function) {
         return function.replace(".bal", "").replace("/", ".");
+    }
+
+    private void generateCoverageReportForTestRun(String moduleJarName, Path testJarPath, Path sourceRootPath,
+                                                  Path targetDirPath, String orgName, String packageName,
+                                                  BuildContext buildContext) {
+        ExecutionCoverageBuilder coverageBuilder = new ExecutionCoverageBuilder(sourceRootPath, targetDirPath,
+                testJarPath, orgName, moduleJarName, packageName);
+        boolean execFileGenerated = coverageBuilder.generateExecFile();
+        buildContext.out().println("\nGenerating the coverage report");
+        if (execFileGenerated) {
+            buildContext.out().println("\tballerina.exec is generated");
+            // unzip the compiled source
+            coverageBuilder.unzipCompiledSource();
+            // copy the content as described with package naming
+            buildContext.out().println("\tCreating source file directory");
+            coverageBuilder.createSourceFileDirectory();
+            // generate the coverage report
+            coverageBuilder.generateCoverageReport();
+            buildContext.out().println("\nReport is generated. visit target/coverage to see the report.");
+        } else {
+            buildContext.out().println("Couldn't create the ballerina.exec file");
+        }
     }
 
     /**
