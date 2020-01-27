@@ -44,6 +44,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.ballerinalang.test.runtime.util.TesterinaConstants.TEST_RUNTIME_JAR_PREFIX;
@@ -110,6 +111,15 @@ public class RunTestsTask implements Task {
         }
     }
 
+            if (this.generateCoverage) {
+                String orgName = bLangPackage.packageID.getOrgName().toString();
+                String packageName = bLangPackage.packageID.getName().toString();
+                generateCoverageReportForTestRun(testModuleJarFileName, testJarPath, sourceRootPath, targetDirPath,
+                        orgName, packageName, buildContext);
+            } else {
+                readDataFromJsonAndLaunchTestSuit(testModuleJarFileName, targetDirPath, testJarPath, buildContext);
+            }
+        }
     /**
      * Extract data from the given bLangPackage.
      *
@@ -159,6 +169,17 @@ public class RunTestsTask implements Task {
         return function.replace(".bal", "").replace("/", ".");
     }
 
+    /**
+     * Generate the coverage report from a test run.
+     *
+     * @param moduleJarName file name to search for a directory
+     * @param testJarPath path to the this testable jar file
+     * @param sourceRootPath path of the source root.
+     * @param targetDirPath path of the target directory
+     * @param orgName organization name derived from the bLangPackage
+     * @param packageName package name derived from the bLangPackage
+     * @param buildContext buildContext to show some basic outputs
+     */
     private void generateCoverageReportForTestRun(String moduleJarName, Path testJarPath, Path sourceRootPath,
                                                   Path targetDirPath, String orgName, String packageName,
                                                   BuildContext buildContext) {
@@ -167,7 +188,7 @@ public class RunTestsTask implements Task {
         boolean execFileGenerated = coverageBuilder.generateExecFile();
         buildContext.out().println("\nGenerating the coverage report");
         if (execFileGenerated) {
-            buildContext.out().println("\tballerina.exec is generated");
+            buildContext.out().println("\tCoverage is generated");
             // unzip the compiled source
             coverageBuilder.unzipCompiledSource();
             // copy the content as described with package naming
@@ -177,7 +198,7 @@ public class RunTestsTask implements Task {
             coverageBuilder.generateCoverageReport();
             buildContext.out().println("\nReport is generated. visit target/coverage to see the report.");
         } else {
-            buildContext.out().println("Couldn't create the ballerina.exec file");
+            buildContext.out().println("Couldn't create the Coverage. Please try again.");
         }
     }
 
@@ -199,7 +220,35 @@ public class RunTestsTask implements Task {
     }
 
     private int runTestSuit(Path jsonPath, BuildContext buildContext, HashSet<Path> testDependencies) {
+    /**
+     * Run the tests by reading and passing data from a json file.
+     *
+     * @param moduleJarName directory to find the json file
+     * @param targetPath target path to resolve the json cache directory
+     * @param testJarPath path of the thin testable jar
+     * @param buildContext build context to show some basic outputs
+     */
+    private void readDataFromJsonAndLaunchTestSuit(String moduleJarName, Path targetPath, Path testJarPath,
+                                                   BuildContext buildContext) {
+        Path jsonCachePath = targetPath.resolve(ProjectDirConstants.CACHES_DIR_NAME)
+                .resolve(ProjectDirConstants.JSON_CACHE_DIR_NAME).resolve(moduleJarName);
+        Path balDependencyPath = Paths.get(System.getProperty(BALLERINA_HOME)).resolve(BALLERINA_HOME_BRE)
+                .resolve(BALLERINA_HOME_LIB);
         String javaCommand = System.getProperty("java.command");
+        String filePathSeparator = System.getProperty("file.separator");
+        String classPathSeparator = System.getProperty("path.separator");
+        String launcherClassName = TesterinaConstants.TESTERINA_LAUNCHER_CLASS_NAME;
+        String classPaths = balDependencyPath.toString() + filePathSeparator + "*"
+                + classPathSeparator + testJarPath.toString();
+
+        // building the java command
+        List<String> commands = new ArrayList<>();
+        commands.add(javaCommand); // java command that is used by ballerina
+        commands.add("-cp"); // terminal option to set the classpaths
+        commands.add(classPaths); // set the class paths including testable thin jat
+        commands.add(launcherClassName); // launcher main class name
+        commands.add(jsonCachePath.toString()); // json cache path as a command line argument
+
         String mainClassName = TesterinaConstants.TESTERINA_LAUNCHER_CLASS_NAME;
         try {
             String classPath = getClassPath(getTestRuntimeJar(buildContext), testDependencies);
@@ -208,6 +257,26 @@ public class RunTestsTask implements Task {
             ProcessBuilder processBuilder = new ProcessBuilder(cmdArgs).inheritIO();;
             Process proc = processBuilder.start();
            return proc.waitFor();
+            ProcessBuilder processBuilder = new ProcessBuilder(commands);
+            Process proc = processBuilder.start();
+            proc.waitFor();
+
+            // Then retrieve the process output
+            InputStream in = proc.getInputStream();
+            InputStream err = proc.getErrorStream();
+            int outputStreamLength;
+
+            byte[] b = new byte[in.available()];
+            outputStreamLength = in.read(b, 0, b.length);
+            if (outputStreamLength > 0) {
+                buildContext.out().println(new String(b, StandardCharsets.UTF_8));
+            }
+
+            byte[] c = new byte[err.available()];
+            outputStreamLength = err.read(c, 0, c.length);
+            if (outputStreamLength > 0) {
+                buildContext.out().println(new String(c, StandardCharsets.UTF_8));
+            }
         } catch (IOException | InterruptedException e) {
             throw createLauncherException("unable to run the tests: " + e.getMessage());
         }
