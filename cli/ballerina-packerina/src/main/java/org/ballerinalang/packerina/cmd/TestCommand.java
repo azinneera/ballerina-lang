@@ -360,7 +360,7 @@ public class TestCommand implements BLauncherCmd {
                 // tasks to list groups or execute tests. the 'listGroups' boolean is used to decide whether to
                 // skip the task or to execute
                 .addTask(new ListTestGroupsTask(), !listGroups) // list the available test groups
-                .addTask(new RunTestsTask(args, groupList, disableGroupList), listGroups) // run tests
+                .addTask(new RunTestsTask(this.coverage, args, groupList, disableGroupList), listGroups) // run tests
                 .build();
 
         taskExecutor.executeTasks(buildContext);
@@ -389,4 +389,5 @@ public class TestCommand implements BLauncherCmd {
     @Override
     public void setParentCmdParser(CommandLine parentCmdParser) {
     }
+
 }

@@ -33,5 +33,6 @@ public class TesterinaConstants {
 
     public static final String DOT = ".";
     public static final String ANON_ORG = "$anon";
+    public static final String TESTERINA_EXECUTOR_CLASS_NAME = "org.ballerinalang.testerina.Executor";
 
 }

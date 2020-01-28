@@ -33,6 +33,8 @@ import org.ballerinalang.tool.util.BFileUtil;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 import org.wso2.ballerinalang.util.Lists;
 import org.wso2.ballerinalang.util.RepoUtils;
+import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
+import org.wso2.ballerinalang.util.Lists;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -58,9 +60,11 @@ import static org.wso2.ballerinalang.compiler.util.ProjectDirConstants.BLANG_COM
  */
 public class RunTestsTask implements Task {
     private boolean generateCoverage;
+    private String[] programArgs;
 
-    public RunTestsTask(boolean generateCoverage) {
+    public RunTestsTask(boolean generateCoverage, String[] programArgs) {
         this.generateCoverage = generateCoverage;
+        this.programArgs = programArgs.clone();
     }
 
     private final String[] args;
@@ -184,19 +188,17 @@ public class RunTestsTask implements Task {
                                                   Path targetDirPath, String orgName, String packageName,
                                                   BuildContext buildContext) {
         ExecutionCoverageBuilder coverageBuilder = new ExecutionCoverageBuilder(sourceRootPath, targetDirPath,
-                testJarPath, orgName, moduleJarName, packageName);
+                testJarPath, this.programArgs, orgName, moduleJarName, packageName);
         boolean execFileGenerated = coverageBuilder.generateExecFile();
         buildContext.out().println("\nGenerating the coverage report");
         if (execFileGenerated) {
-            buildContext.out().println("\tCoverage is generated");
             // unzip the compiled source
             coverageBuilder.unzipCompiledSource();
             // copy the content as described with package naming
-            buildContext.out().println("\tCreating source file directory");
             coverageBuilder.createSourceFileDirectory();
             // generate the coverage report
             coverageBuilder.generateCoverageReport();
-            buildContext.out().println("\nReport is generated. visit target/coverage to see the report.");
+            buildContext.out().println("\ttarget/coverage/" + moduleJarName);
         } else {
             buildContext.out().println("Couldn't create the Coverage. Please try again.");
         }
@@ -222,14 +224,13 @@ public class RunTestsTask implements Task {
     private int runTestSuit(Path jsonPath, BuildContext buildContext, HashSet<Path> testDependencies) {
     /**
      * Run the tests by reading and passing data from a json file.
-     *
-     * @param moduleJarName directory to find the json file
+     *  @param moduleJarName directory to find the json file
      * @param targetPath target path to resolve the json cache directory
      * @param testJarPath path of the thin testable jar
      * @param buildContext build context to show some basic outputs
      */
-    private void readDataFromJsonAndLaunchTestSuit(String moduleJarName, Path targetPath, Path testJarPath,
-                                                   BuildContext buildContext) {
+    private void readDataFromJsonAndLaunchTestSuit(String moduleJarName, Path targetPath, Path testJarPath
+            , BuildContext buildContext) {
         Path jsonCachePath = targetPath.resolve(ProjectDirConstants.CACHES_DIR_NAME)
                 .resolve(ProjectDirConstants.JSON_CACHE_DIR_NAME).resolve(moduleJarName);
         Path balDependencyPath = Paths.get(System.getProperty(BALLERINA_HOME)).resolve(BALLERINA_HOME_BRE)
@@ -237,17 +238,19 @@ public class RunTestsTask implements Task {
         String javaCommand = System.getProperty("java.command");
         String filePathSeparator = System.getProperty("file.separator");
         String classPathSeparator = System.getProperty("path.separator");
-        String launcherClassName = TesterinaConstants.TESTERINA_LAUNCHER_CLASS_NAME;
+        String launcherClassName = TesterinaConstants.TESTERINA_EXECUTOR_CLASS_NAME;
         String classPaths = balDependencyPath.toString() + filePathSeparator + "*"
                 + classPathSeparator + testJarPath.toString();
 
         // building the java command
         List<String> commands = new ArrayList<>();
         commands.add(javaCommand); // java command that is used by ballerina
-        commands.add("-cp"); // terminal option to set the classpaths
+        commands.add("-cp"); // terminal option to set the classpath
         commands.add(classPaths); // set the class paths including testable thin jat
         commands.add(launcherClassName); // launcher main class name
-        commands.add(jsonCachePath.toString()); // json cache path as a command line argument
+        if (this.programArgs != null) {
+            commands.addAll(Lists.of(this.programArgs));
+        }
 
         String mainClassName = TesterinaConstants.TESTERINA_LAUNCHER_CLASS_NAME;
         try {
@@ -258,6 +261,7 @@ public class RunTestsTask implements Task {
             Process proc = processBuilder.start();
            return proc.waitFor();
             ProcessBuilder processBuilder = new ProcessBuilder(commands);
+            processBuilder.environment().put("testerina.tesetsuite.path", jsonCachePath.toString());
             Process proc = processBuilder.start();
             proc.waitFor();
 
