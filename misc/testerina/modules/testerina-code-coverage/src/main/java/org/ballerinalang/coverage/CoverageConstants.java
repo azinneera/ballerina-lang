@@ -17,6 +17,8 @@
  */
 package org.ballerinalang.coverage;
 
+import java.nio.file.Path;
+
 /**
  * Java class that holds coverage constants.
  *
@@ -24,9 +26,12 @@ package org.ballerinalang.coverage;
  */
 class CoverageConstants {
 
-    static final String EXEC_FILE_NAME = "ballerina.exec";
-    static final String AGENT_FILE_NAME = "jacocoagent.jar";
+    public static final String BIN_DIR = "bin";
+    public static final String SRC_DIR = "src";
+    public static final String EXEC_FILE_NAME = "ballerina.exec";
+    public static final String AGENT_FILE_NAME = "jacocoagent.jar";
     static final String CLI_FILE_NAME = "jacococli.jar";
     static final String EXTRACTED_DIRECTORY_NAME = "Extracted";
     static final String TESTERINA_EXECUTOR_CLASS_NAME = "org.ballerinalang.testerina.Executor";
+    public static final String COVERAGE_DIR = "coverage";
 }

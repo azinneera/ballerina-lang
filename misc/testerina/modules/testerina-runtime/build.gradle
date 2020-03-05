@@ -21,17 +21,59 @@ configurations {
     dist {
         transitive false
     }
+    jacocoCore {
+        transitive false
+    }
+    jacocoReport {
+        transitive false
+    }
+    asm {
+        transitive false
+    }
+    asmCommons {
+        transitive false
+    }
+    asmTree {
+        transitive false
+    }
 }
 
 dependencies {
     implementation project(':ballerina-runtime')
     implementation project(':ballerina-config')
+   // implementation project(':testerina:testerina-code-coverage')
     implementation 'com.google.code.gson:gson'
     dist 'com.google.code.gson:gson:2.7'
+    jacocoCore 'org.jacoco:org.jacoco.core:0.8.5'
+    jacocoReport 'org.jacoco:org.jacoco.report:0.8.5'
+    asm 'org.ow2.asm:asm:7.2'
+    asmCommons 'org.ow2.asm:asm-commons:7.2'
+    asmTree 'org.ow2.asm:asm-tree:7.2'
+
+    compile group: 'org.jacoco', name: 'org.jacoco.core', version: '0.8.4'
+    compile group: 'org.jacoco', name: 'org.jacoco.report', version: '0.8.4'
+    compile group: 'org.ow2.asm', name: 'asm', version: '7.2'
+    compile group: 'org.ow2.asm', name: 'asm-commons', version: '7.2'
+    compile group: 'org.ow2.asm', name: 'asm-tree', version: '7.2'
 
     jar {
         from {
             configurations.dist.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        from {
+            configurations.jacocoCore.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        from {
+            configurations.jacocoReport.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        from {
+            configurations.asm.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        from {
+            configurations.asmCommons.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+        from {
+            configurations.asmTree.collect { it.isDirectory() ? it : zipTree(it) }
         }
     }
 }

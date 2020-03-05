@@ -109,8 +109,7 @@ dependencies {
     dist project(':openapi-ballerina:ballerina-client-generator')
     dist project(':docerina')
     dist project(':protobuf-ballerina')
-    dist project(':testerina:testerina-code-coverage')
-    dist project(':testerina:testerina-launcher')
+    //dist project(':testerina:testerina-code-coverage')
     dist project(':testerina:testerina-runtime')
     docerina project(':docerina-gradle-plugin')
 
