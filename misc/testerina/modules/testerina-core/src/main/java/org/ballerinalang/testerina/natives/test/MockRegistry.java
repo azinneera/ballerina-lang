@@ -18,38 +18,46 @@
 package org.ballerinalang.testerina.natives.test;
 
 
+import org.ballerinalang.jvm.values.AbstractObjectValue;
+import org.ballerinalang.jvm.values.ArrayValue;
+import org.ballerinalang.jvm.values.IteratorValue;
 import org.ballerinalang.jvm.values.ObjectValue;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class MockRegistry {
+    public static final String ANY = "__ANY__";
     private static MockRegistry instance = new MockRegistry();
 
     public static MockRegistry getInstance() {
         return instance;
     }
-    private Map<String, Case> casesMap = new HashMap<String, Case>();
-    private List<ObjectValue> registerInProgress = new ArrayList();
+    private Map<String, Object> casesMap = new HashMap();
+    private ArrayList registerInProgress = new ArrayList();
+    private List<Object> acceptAnyArgs = new ArrayList<>();
+
+    public List<Object> getAcceptAnyArgs() {
+        return acceptAnyArgs;
+    }
+
+    public void addToAnyArgObjList(Object acceptAnyArgsObj) {
+        this.acceptAnyArgs.add(acceptAnyArgsObj);
+    }
 
     public static class Case {
         private ObjectValue mockObject;
         private String functionName;
-        private Object[] argsList;
-        private boolean isArgAvailable = true;
-        private Object returnVal = null;
+        private ArrayValue argsList;
+        private Object returnVal;
 
-        public Case(ObjectValue mockObject, String functionName, Object[] argsList) {
+        public Case(ObjectValue mockObject, String functionName, ArrayValue argsList, Object returnVal) {
             this.mockObject = mockObject;
 
             this.functionName = functionName;
             this.argsList = argsList;
-        }
-
-        public void setReturnVal(Object returnVal) {
             this.returnVal = returnVal;
         }
 
@@ -57,13 +65,6 @@ public class MockRegistry {
             return returnVal;
         }
 
-        public boolean isArgAvailable() {
-            return isArgAvailable;
-        }
-
-        public void setArgAvailable(boolean argAvailable) {
-            isArgAvailable = argAvailable;
-        }
     }
 
     public void addToRegisterInProgress(ObjectValue mockObj) {
@@ -78,21 +79,60 @@ public class MockRegistry {
         return registerInProgress;
     }
 
-    public String addNewCase(ObjectValue mockObject, String functionName, Object[] argsList) {
-        Case mockCase = new Case(mockObject, functionName, argsList);
+    public void addNewCase(ObjectValue mockObject, String functionName, ArrayValue argsList, Object returnVal) {
+//        Case mockCase = new Case(mockObject, functionName, argsList, returnVal);
         String caseId = constructCaseId(mockObject, functionName, argsList);
-        casesMap.put(caseId, mockCase);
-        return caseId;
+        casesMap.put(caseId, returnVal);
     }
 
-    public Case getCase(String caseId) {
+    private String constructCaseId(ObjectValue mockObject, String functionName, ArrayValue argsList) {
+        StringBuilder caseIdBuilder = new StringBuilder();
+        if (mockObject != null) {
+            caseIdBuilder.append(mockObject.hashCode()).append("-").append(functionName);
+            if (argsList.size() > 0) {
+                IteratorValue argIterator = argsList.getIterator();
+                while (argIterator.hasNext()) {
+                    caseIdBuilder.append("-").append(argIterator.next().toString());
+                }
+            }
+        }
+        return caseIdBuilder.toString();
+    }
+
+    public Object getCase(String caseId) {
+
         return casesMap.get(caseId);
     }
 
+    public boolean hasCase(String caseId) {
+        return casesMap.containsKey(caseId);
+    }
+
+
     public static String constructCaseId(ObjectValue mockObject, String functionName, Object[] argsList) {
-        return mockObject.hashCode() + "-" +functionName + "-" + Arrays.toString(argsList);
+         StringBuilder caseIdSuffixBuilder = new StringBuilder();
+
+         for (Object objArg : argsList) {
+             if (objArg != null) {
+                 if (objArg instanceof AbstractObjectValue) {
+                     caseIdSuffixBuilder.append("-").append("anyObj");
+                 } else if (objArg instanceof GenericRecord) {
+                     caseIdSuffixBuilder.append("-").append("anyRecord");
+                 } else if (ANY.equals(objArg.toString())) {
+                     caseIdSuffixBuilder.append("-").append("anyString");
+                 } else {
+                     caseIdSuffixBuilder.append("-").append(objArg.toString());
+                 }
+             }
+        }
+        if (caseIdSuffixBuilder.toString().isEmpty()) {
+            constructCaseId(mockObject, functionName);
+        }
+        return mockObject.hashCode() + "-" +functionName + caseIdSuffixBuilder.toString() ;
+    }
+
+    public static String constructCaseId(ObjectValue mockObject, String functionName) {
+        return mockObject.hashCode() + "-" +functionName + "-withAny";
     }
 
 }
-
-

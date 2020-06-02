@@ -19,12 +19,18 @@ package org.ballerinalang.testerina.natives.test;
 
 import org.ballerinalang.jvm.scheduling.Strand;
 import org.ballerinalang.jvm.types.BObjectType;
+import org.ballerinalang.jvm.types.BRecordType;
 import org.ballerinalang.jvm.util.exceptions.BallerinaException;
 import org.ballerinalang.jvm.values.AbstractObjectValue;
 import org.ballerinalang.jvm.values.FutureValue;
 import org.ballerinalang.jvm.values.ObjectValue;
 import org.ballerinalang.jvm.values.StringValue;
 import org.ballerinalang.jvm.values.api.BString;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 
 public class GenericMockObjectValue extends AbstractObjectValue {
 
@@ -37,15 +43,18 @@ public class GenericMockObjectValue extends AbstractObjectValue {
 
     @Override
     public Object call(Strand strand, String funcName, Object... args) {
-        if (MockRegistry.getInstance().getRegisterInProgress().contains(this.mockObj)) {
-            return MockRegistry.getInstance().addNewCase(this.mockObj, funcName, args);
+        if (!this.mockObj.getType().getName().contains("$anonType$")) {
+            return mockObj.call(strand, funcName, args);
+        } else {
+            List<String> caseIds = getCaseIds(this.mockObj, funcName, args);
+            for ( String caseId : caseIds) {
+                if (MockRegistry.getInstance().hasCase(caseId)) {
+                    return MockRegistry.getInstance().getCase(caseId);
+                }
+            }
         }
 
-        String caseId = MockRegistry.constructCaseId(this.mockObj, funcName, args);
-        if(MockRegistry.getInstance().getCase(caseId) == null) {
-            throw new BallerinaException("mock object is not registered");
-        }
-        return MockRegistry.getInstance().getCase(caseId).getReturnVal();
+        throw new BallerinaException("no cases registered for " + mockObj.getType());
     }
 
     @Override
@@ -85,5 +94,61 @@ public class GenericMockObjectValue extends AbstractObjectValue {
 
     public ObjectValue getMockObj() {
         return this.mockObj;
+    }
+
+    private List<String> getCaseIds(ObjectValue mockObj, String funcName, Object[] args) {
+        List<String> caseIdList = new ArrayList<>();
+        StringBuilder caseId = new StringBuilder();
+        // args contain an extra boolean value arg after every proper argument.
+        // These should be removed before constructing case ids
+        args = removeUnnecessaryArgs(args);
+
+        // add case for function without args
+        caseId.append(mockObj.hashCode()).append("-").append(funcName);
+        caseIdList.add(caseId.toString());
+
+        // add case for function with ANY specified for objects
+        for (Object arg : args) {
+            caseId.append("-");
+            if (arg instanceof AbstractObjectValue) {
+                caseId.append(MockRegistry.ANY);
+            } else {
+                caseId.append(arg);
+            }
+        }
+        caseIdList.add(caseId.toString());
+        caseId.setLength(0);
+        caseId.append(mockObj.hashCode()).append("-").append(funcName);
+
+        // add case for function with ANY specified for objects and records
+        for (Object arg : args) {
+            caseId.append("-");
+            if (arg instanceof AbstractObjectValue || arg instanceof BRecordType) {
+                caseId.append(MockRegistry.ANY);
+            } else {
+                caseId.append(arg);
+            }
+        }
+
+        // skip if entry exists in list
+        if (!caseIdList.contains(caseId.toString())) {
+            caseIdList.add(caseId.toString());
+        }
+
+        Collections.reverse(caseIdList);
+
+        return caseIdList;
+    }
+
+    private Object[] removeUnnecessaryArgs(Object[] args) {
+        Object[] newArgs = new Object[args.length/2];
+        int i = 0;
+        int j = 0;
+        while (i < args.length) {
+            newArgs[j] = args[i];
+            i += 2;
+            j += 1;
+        }
+        return newArgs;
     }
 }

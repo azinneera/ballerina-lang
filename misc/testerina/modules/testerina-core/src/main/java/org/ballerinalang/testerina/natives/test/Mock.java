@@ -17,8 +17,14 @@
  */
 package org.ballerinalang.testerina.natives.test;
 
+import org.ballerinalang.jvm.BallerinaErrors;
+import org.ballerinalang.jvm.StringUtils;
+import org.ballerinalang.jvm.types.AttachedFunction;
 import org.ballerinalang.jvm.types.BObjectType;
+import org.ballerinalang.jvm.types.BType;
 import org.ballerinalang.jvm.util.exceptions.BallerinaException;
+import org.ballerinalang.jvm.values.ArrayValue;
+import org.ballerinalang.jvm.values.ErrorValue;
 import org.ballerinalang.jvm.values.ObjectValue;
 import org.ballerinalang.jvm.values.TypedescValue;
 
@@ -27,38 +33,91 @@ import org.ballerinalang.jvm.values.TypedescValue;
  */
 public class Mock {
 
-    public static ObjectValue mockExt(TypedescValue typedescValue, ObjectValue objectValue) {
+    public static ObjectValue mock(TypedescValue typedescValue, ObjectValue objectValue) {
+        if (!objectValue.getType().getName().contains("$anonType$")) {
+            if (objectValue.getType().getAttachedFunctions().length == 0 &&
+                    objectValue.getType().getFields().size() == 0) {
+                throw new BallerinaException("Mock object type " + objectValue.getType().getName()
+                        + " should have at least one member function or field declared.");
+            } else {
+                for (AttachedFunction attachedFunction : objectValue.getType().getAttachedFunctions()) {
+                    if(!isFunctionAvailable(attachedFunction,
+                            ((BObjectType)typedescValue.getDescribingType()).getAttachedFunctions())) {
+                        throw new BallerinaException("Mock object type " + objectValue.getType().getName()
+                                + " is not compatible with original");
+                    }
+                }
+            }
+        }
         BObjectType bObjectType = (BObjectType) typedescValue.getDescribingType();
         return new GenericMockObjectValue(bObjectType, objectValue);
     }
 
-    public static void startMockRegister(ObjectValue... objectValues) {
-        for (ObjectValue objectValue : objectValues) {
-            GenericMockObjectValue genericMock = (GenericMockObjectValue) objectValue;
-            MockRegistry.getInstance().addToRegisterInProgress(genericMock.getMockObj());
-        }
-    }
-    public static void endMockRegister(ObjectValue... objectValues) {
-        for (ObjectValue objectValue : objectValues) {
-            GenericMockObjectValue genericMock = (GenericMockObjectValue) objectValue;
-            MockRegistry.getInstance().removeFromRegisterInProgress(genericMock.getMockObj());
-        }
+    public static void thenReturn(ObjectValue caseObj) {
+        GenericMockObjectValue genericMock = (GenericMockObjectValue) caseObj.get("prepareObj");
+        ObjectValue mockObj = genericMock.getMockObj();
+        String functionName = caseObj.getStringValue("functionName");
+        ArrayValue args = caseObj.getArrayValue("args");
+        //TODO: check
+//        Object returnVal = caseObj.get(StringUtils.fromString("returnVal"));
+        Object returnVal = caseObj.get("returnVal");
+        MockRegistry.getInstance().addNewCase(mockObj, functionName, args, returnVal);
     }
 
-    public static void thenReturnExt(ObjectValue caseObj, Object retVal) {
-        String caseId = caseObj.getStringValue("caseId");
-        if(MockRegistry.getInstance().getCase(caseId) == null) {
-            throw new BallerinaException("object not registered for mocking.");
+    public static ErrorValue validatePrepareObj(ObjectValue caseObj) {
+        GenericMockObjectValue genericMock = (GenericMockObjectValue) caseObj;
+        ObjectValue mockObj = genericMock.getMockObj();
+        String objectType = mockObj.getType().getName();
+        if (!objectType.contains("$anonType$")) {
+            String detail = "Cases cannot be registered to user-defined object type " + genericMock.getType().getName();
+            return BallerinaErrors.createError(StringUtils.fromString(MockConstants.INVALID_MOCK_OBJECT_ERROR), detail);
         }
-        MockRegistry.getInstance().getCase(caseId).setReturnVal(retVal);
-        System.out.println();
+        return null;
     }
 
+    public static ErrorValue validateFunctionName(ObjectValue caseObj) throws BallerinaException {
+        GenericMockObjectValue genericMock = (GenericMockObjectValue) caseObj.getObjectValue("prepareObj");
+        String functionName = caseObj.getStringValue("functionName");
+        if (!isFunctionAvailable(functionName, genericMock.getType().getAttachedFunctions())) {
+            String detail = functionName + ": no such function is available in " + genericMock.getType().getName();
+            return BallerinaErrors.createError(StringUtils.fromString(MockConstants.FUNCTION_NOT_FOUND_ERROR), detail);
+        }
+        return null;
+    }
 
+    private static boolean isFunctionAvailable(String functionName, AttachedFunction[] attachedFunctions) {
+        for ( AttachedFunction attachedFunction : attachedFunctions) {
+            if (attachedFunction.getName().equals(functionName)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
+    private static boolean isFunctionAvailable(AttachedFunction func, AttachedFunction[] attachedFunctions) {
+        String functionName = func.getName();
+        BType[] paramTypes = func.getParameterType();
+        BType returnType = func.type.getReturnParameterType();
 
+        for ( AttachedFunction attachedFunction : attachedFunctions) {
+            if (attachedFunction.getName().equals(functionName)) {
+                if (paramTypes.length != attachedFunction.getParameterType().length) {
+                    return false;
+                } else {
+                    for (int i = 0; i < paramTypes.length; i++) {
+                        boolean isParamTypeMatching = paramTypes[i].equals(attachedFunction.getParameterType()[i]);
+                        if (!isParamTypeMatching) {
+                            return false;
+                        }
+                    }
+                }
 
-    
+                return returnType.equals(attachedFunction.type.getReturnParameterType());
+
+            }
+        }
+        return false;
+    }
 
     //    public static void whenExt(ObjectValue obj, String functionName) {
 //        ObjectValue mockObj = ((GenericMockObjectValue) obj).getMockObj();
