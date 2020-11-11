@@ -35,9 +35,12 @@ import java.io.ObjectInputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+
+import static io.ballerina.runtime.util.BLangConstants.CONFIG_SEPARATOR;
 
 /**
  * Main class to init the test suit.
@@ -51,7 +54,18 @@ public class Main {
         LaunchUtils.initConfigurations(configArgs);
 
         TestSuite testSuite = deserialize(jsonCachePath.readAllBytes());
+        applyFilters(testSuite, configArgs);
         startTestSuit(Paths.get(testSuite.getSourceRootPath()), testSuite, jsonTmpSummaryPath);
+    }
+
+    private static void applyFilters(TestSuite testSuite, String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].startsWith("isReportRequired")) {
+                String[] keyValuePair = args[i].split(CONFIG_SEPARATOR);
+                testSuite.setReportRequired(Boolean.parseBoolean(keyValuePair[1]));
+                break;
+            }
+        }
     }
 
     private static TestSuite deserialize(byte[] byteArray) {
@@ -80,6 +94,7 @@ public class Main {
 
     private static void writeStatusToJsonFile(ModuleStatus moduleStatus, Path tmpJsonPath) throws IOException {
         File jsonFile = new File(tmpJsonPath.toString());
+        Files.createDirectories(tmpJsonPath.getParent());
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(jsonFile), StandardCharsets.UTF_8)) {
             Gson gson = new Gson();
             String json = gson.toJson(moduleStatus);

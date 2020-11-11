@@ -38,7 +38,7 @@ public class ProjectConstants {
     public static final String BIN_DIR_NAME = "bin";
     public static final String TARGET_DIR_NAME = "target";
 
-    public static final String CACHES_DIR_NAME = "caches";
+    public static final String CACHES_DIR_NAME = "cache";
 
     public static final String HOME_REPO_ENV_KEY = "BALLERINA_HOME_DIR";
     public static final String HOME_REPO_DEFAULT_DIRNAME = ".ballerina";
@@ -99,4 +99,5 @@ public class ProjectConstants {
     public static final String ASM_TREE_JAR = "asm-tree-7.2.jar";
     public static final String ASM_COMMONS_JAR = "asm-commons-7.2.jar";
     public static final String DIFF_UTILS_JAR = "java-diff-utils-4.5.jar";
+    public static final String REPORT_DIR_NAME = "report";
 }
