@@ -27,6 +27,10 @@ configurations {
         transitive false
     }
 
+    balDoc {
+        transitive false
+    }
+
     distributionBirJar {
         transitive false
     }
@@ -105,6 +109,9 @@ artifacts {
         builtBy(ballerinaLangLibBuild)
     }
     distributionBirJar file("$buildDir/new-project/" + modName + "/target/" + modName + ".jar"), {
+        builtBy(ballerinaLangLibBuild)
+    }
+    balDoc file("$buildDir/new-project/" + modName + "/target/apidocs/"), {
         builtBy(ballerinaLangLibBuild)
     }
 }
