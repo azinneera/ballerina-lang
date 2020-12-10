@@ -37,7 +37,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.StringJoiner;
 
 /**
@@ -212,9 +211,9 @@ public class PackageUtils {
             return docName;
         }
 
-        Optional<DocumentId> docId = ProjectLoader.getDocumentId(path, (BuildProject) project);
-        Module module = project.currentPackage().module(docId.get().moduleId());
-        Document document = module.document(docId.get());
+        DocumentId documentId = project.documentId(path);
+        Module module = project.currentPackage().module(documentId.moduleId());
+        Document document = module.document(documentId);
 
         StringJoiner classNameJoiner = new StringJoiner(".");
         classNameJoiner.add(document.module().packageInstance().packageOrg().value())
