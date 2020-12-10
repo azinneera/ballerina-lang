@@ -22,7 +22,6 @@ import io.ballerina.cli.task.CleanTargetDirTask;
 import io.ballerina.cli.task.CompileTask;
 import io.ballerina.cli.task.CreateBaloTask;
 import io.ballerina.cli.task.CreateExecutableTask;
-import io.ballerina.cli.task.CreateTargetDirTask;
 import io.ballerina.cli.task.RunTestsTask;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
@@ -223,7 +222,6 @@ public class BuildCommand implements BLauncherCmd {
 
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 .addTask(new CleanTargetDirTask(), isSingleFileBuild)   // clean the target directory(projects only)
-                .addTask(new CreateTargetDirTask()) // create target directory
 //                .addTask(new ResolveMavenDependenciesTask()) // resolve maven dependencies in Ballerina.toml
                 .addTask(new CompileTask(outStream, errStream)) // compile the modules
 //                .addTask(new CopyResourcesTask()) // merged with CreateJarTask
@@ -232,7 +230,6 @@ public class BuildCommand implements BLauncherCmd {
                     // run tests (projects only)
                 .addTask(new CreateBaloTask(outStream), isSingleFileBuild) // create the BALO ( build projects only)
                 .addTask(new CreateExecutableTask(outStream, this.output), this.compile) //create the executable jar
-                .addTask(new CleanTargetDirTask(), !isSingleFileBuild)  // clean the target dir(single bals only)
                 .build();
 
         taskExecutor.executeTasks(project);

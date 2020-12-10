@@ -132,15 +132,23 @@ public class RunTestsTask implements Task {
         if (report || coverage) {
             testReport = new TestReport();
         }
-        Path sourceRootPath = project.sourceRoot();
+
+        Path sourceRootPath;
         Target target;
         Path testsCachePath;
         try {
+            if (project.kind() == ProjectKind.BUILD_PROJECT) {
+                sourceRootPath = project.sourceRoot();
+            } else {
+                sourceRootPath = Files.createTempDirectory("ballerina-test-cache" + System.nanoTime());
+            }
+
             target = new Target(sourceRootPath);
             testsCachePath = target.getTestsCachePath();
         } catch (IOException e) {
             throw createLauncherException("error while creating target directory: ", e);
         }
+
         this.out.println();
         this.out.print("Running Tests");
         if (coverage) {
