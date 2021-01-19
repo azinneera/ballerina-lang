@@ -50,6 +50,8 @@ public class CreateBaloTask implements Task {
         this.out.println();
         this.out.println("Creating balo");
 
+        project.currentPackage().ballerinaToml().get().textDocument();
+
         Target target;
         Path baloPath;
         try {

@@ -69,6 +69,9 @@ public class BallerinaToml extends TomlDocument {
 
     private BallerinaToml(Path filePath) {
         super(filePath);
+        if (tomlContent().equals("")) {
+            addDefaultTomlContent();
+        }
         this.filePath = filePath;
         this.diagnosticList = new ArrayList<>();
         this.packageManifest = parseAsPackageManifest();

@@ -237,7 +237,7 @@ public class BuildCommand implements BLauncherCmd {
                 .addTask(new RunTestsTask(outStream, errStream, args),
                         project.buildOptions().skipTests() || isSingleFileBuild)
                     // run tests (projects only)
-                .addTask(new CreateBaloTask(outStream), isSingleFileBuild) // create the BALO ( build projects only)
+                .addTask(new CreateBaloTask(outStream), isSingleFileBuild || !this.compile) // create the BALO ( build projects only)
                 .addTask(new CreateExecutableTask(outStream, this.output), this.compile) //create the executable jar
                 .addTask(new CleanTargetDirTask(), !isSingleFileBuild)  // clean the target dir(single bals only)
                 .build();
@@ -251,6 +251,7 @@ public class BuildCommand implements BLauncherCmd {
     private BuildOptions constructBuildOptions() {
         return new BuildOptionsBuilder()
                 .codeCoverage(coverage)
+                .compile(compile)
                 .experimental(experimentalFlag)
                 .offline(offline)
                 .skipTests(skipTests)

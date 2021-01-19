@@ -73,7 +73,7 @@ public class BuildProject extends Project {
         System.setProperty(ProjectConstants.BALLERINA_OFFLINE_FLAG, String.valueOf(buildOptions.offlineBuild()));
 
         ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-        PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(projectPath);
+        PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(projectPath, buildOptions);
         BuildOptions mergedBuildOptions = ProjectFiles.createBuildOptions(projectPath, buildOptions);
         BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions);
         buildProject.addPackage(packageConfig);
