@@ -19,6 +19,7 @@ package io.ballerina.projects.internal;
 
 import io.ballerina.projects.BallerinaToml;
 import io.ballerina.projects.BallerinaTomlException;
+import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.DocumentConfig;
 import io.ballerina.projects.DocumentId;
@@ -33,6 +34,7 @@ import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
+import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.util.ProjectConstants;
 
 import java.nio.file.Path;
@@ -64,6 +66,16 @@ public class PackageConfigCreator {
         PackageManifest packageManifest = ProjectFiles.createPackageManifest(ballerinaToml);
         PackageData packageData = ProjectFiles.loadBuildProjectPackageData(projectDirPath);
         return createPackageConfig(packageData, packageManifest, ballerinaToml);
+    }
+
+    public static PackageConfig createBuildProjectConfig(Path projectDirPath, BuildOptions buildOptions) {
+        Path balTomlFilePath = projectDirPath.resolve(ProjectConstants.BALLERINA_TOML);
+        if (buildOptions.compile()) {
+            if (balTomlFilePath.toFile().length() <= 0) {
+                throw new ProjectException(ProjectConstants.BALLERINA_TOML + " cannot be empty");
+            }
+        }
+        return createBuildProjectConfig(projectDirPath);
     }
 
     public static PackageConfig createSingleFileProjectConfig(Path filePath) {

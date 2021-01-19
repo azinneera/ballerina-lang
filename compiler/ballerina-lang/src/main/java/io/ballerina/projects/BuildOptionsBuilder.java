@@ -28,6 +28,7 @@ public class BuildOptionsBuilder {
     private Boolean testReport;
     private Boolean codeCoverage;
     private final CompilationOptionsBuilder compilationOptionsBuilder;
+    private boolean compile;
 
     public BuildOptionsBuilder() {
         compilationOptionsBuilder = new CompilationOptionsBuilder();
@@ -35,6 +36,11 @@ public class BuildOptionsBuilder {
 
     public BuildOptionsBuilder testReport(Boolean value) {
         testReport = value;
+        return this;
+    }
+
+    public BuildOptionsBuilder compile(boolean value) {
+        compile = value;
         return this;
     }
 
@@ -75,6 +81,6 @@ public class BuildOptionsBuilder {
 
     public BuildOptions build() {
         CompilationOptions compilationOptions = compilationOptionsBuilder.build();
-        return new BuildOptions(testReport, codeCoverage, compilationOptions);
+        return new BuildOptions(testReport, codeCoverage, compile, compilationOptions);
     }
 }

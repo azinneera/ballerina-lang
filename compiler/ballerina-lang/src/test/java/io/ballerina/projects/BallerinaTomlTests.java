@@ -96,7 +96,7 @@ public class BallerinaTomlTests {
         Assert.assertEquals(descriptor.version().value().toString(), "1.0.0");
     }
 
-    @Test
+    @Test(enabled = false)
     public void testEmptyBallerinaToml() {
         BallerinaToml ballerinaToml = BallerinaToml.from(BAL_TOML_REPO.resolve("empty-ballerina.toml"));
         Assert.assertTrue(ballerinaToml.diagnostics().hasErrors());

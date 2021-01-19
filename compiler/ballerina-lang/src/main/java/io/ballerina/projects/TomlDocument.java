@@ -17,6 +17,9 @@
  */
 package io.ballerina.projects;
 
+import io.ballerina.projects.util.FileUtils;
+import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.toml.semantic.ast.TomlTableNode;
 import io.ballerina.toml.semantic.ast.TomlTransformer;
 import io.ballerina.toml.syntax.tree.DocumentNode;
@@ -27,6 +30,8 @@ import io.ballerina.tools.text.TextDocuments;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Optional;
 
 /**
  * Represents a generic TOML document in a Ballerina package.
@@ -35,12 +40,38 @@ import java.nio.file.Path;
  */
 public abstract class TomlDocument {
     private final Path filePath;
+    private String tomlContent;
     private TextDocument textDocument;
     private SyntaxTree syntaxTree;
     private TomlTableNode tomlAstNode;
+    public static final String ORG_NAME = "ORG_NAME";
+    public static final String PKG_NAME = "PKG_NAME";
 
     protected TomlDocument(Path filePath) {
         this.filePath = filePath;
+        try {
+            this.tomlContent = Files.readString(filePath);
+        } catch (IOException e) {
+            throw new ProjectException("Failed to read file: " + filePath, e);
+        }
+    }
+
+    protected void addDefaultTomlContent() {
+        String defaultBallerinaToml;
+        try {
+            defaultBallerinaToml = FileUtils.readFileAsString("templates/Ballerina.toml");
+        } catch (IOException e) {
+            throw new ProjectException("Failed to read file: " + filePath, e);
+        }
+        Path userDir = Paths.get(System.getProperty(ProjectConstants.USER_DIR));
+        String packageName = Optional.of(userDir.getFileName()).get().toString();
+        // replace manifest org and name with a guessed value.
+        this.tomlContent = defaultBallerinaToml.replaceAll(ORG_NAME, ProjectUtils.guessOrgName()).
+                replaceAll(PKG_NAME, ProjectUtils.guessPkgName(packageName));
+    }
+
+    protected String tomlContent() {
+        return this.tomlContent;
     }
 
     public SyntaxTree syntaxTree() {
@@ -66,11 +97,7 @@ public abstract class TomlDocument {
             return textDocument;
         }
 
-        try {
-            textDocument = TextDocuments.from(Files.readString(filePath));
-        } catch (IOException e) {
-            throw new ProjectException("Failed to read file: " + filePath, e);
-        }
+        textDocument = TextDocuments.from(tomlContent);
         return textDocument;
     }
 

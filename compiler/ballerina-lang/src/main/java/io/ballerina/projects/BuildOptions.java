@@ -25,13 +25,16 @@ import java.util.Objects;
 public class BuildOptions {
     private Boolean testReport;
     private Boolean codeCoverage;
+    private boolean compile;
     private CompilationOptions compilationOptions;
 
     BuildOptions(Boolean testReport,
                  Boolean codeCoverage,
+                 boolean compile,
                  CompilationOptions compilationOptions) {
         this.testReport = testReport;
         this.codeCoverage = codeCoverage;
+        this.compile = compile;
         this.compilationOptions = compilationOptions;
     }
 
@@ -57,6 +60,10 @@ public class BuildOptions {
 
     public boolean observabilityIncluded() {
         return this.compilationOptions.observabilityIncluded();
+    }
+
+    public boolean compile() {
+        return compile;
     }
 
     CompilationOptions compilationOptions() {
