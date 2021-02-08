@@ -27,9 +27,11 @@ jobs:
                 env:
                     packageUser: ${{ secrets.BALLERINA_BOT_USERNAME }}
                     packagePAT: ${{ secrets.BALLERINA_BOT_TOKEN }}
+                    CODECOV_TOKEN:  ${{ secrets.CODECOV_TOKEN }}
                 run: |
                     ./gradlew clean build -x createJavadoc --scan publish --continue --rerun-tasks
-
+                    bash <(curl -s https://codecov.io/bash)
+                    
             -   name: Trigger Standard Library Module Builds
                 run: |
                     echo "Triggering stdlib module builds"
