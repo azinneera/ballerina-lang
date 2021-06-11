@@ -368,12 +368,14 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
 
         IsolationInferenceInfo isolationInferenceInfo = null;
 
-        if (isIsolationInferableFunction(funcNode)) {
+        BInvokableSymbol symbol = funcNode.symbol;
+
+        if (isIsolationInferableFunction(funcNode) && !isolationInferenceInfoMap.containsKey(symbol)) {
             isolationInferenceInfo = new IsolationInferenceInfo();
-            isolationInferenceInfoMap.put(funcNode.symbol, isolationInferenceInfo);
+            isolationInferenceInfoMap.put(symbol, isolationInferenceInfo);
         }
 
-        SymbolEnv funcEnv = SymbolEnv.createFunctionEnv(funcNode, funcNode.symbol.scope, env);
+        SymbolEnv funcEnv = SymbolEnv.createFunctionEnv(funcNode, symbol.scope, env);
 
         for (BLangSimpleVariable requiredParam : funcNode.requiredParams) {
             if (!requiredParam.symbol.isDefaultable) {
@@ -385,13 +387,14 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
 
         analyzeNode(funcNode.body, funcEnv);
 
-        if (!isIsolated(funcNode.symbol.flags) && this.inferredIsolated && !
-                Symbols.isFlagOn(funcNode.symbol.flags, Flags.WORKER)) {
+        if (!isIsolated(symbol.flags) && this.inferredIsolated && !
+                Symbols.isFlagOn(symbol.flags, Flags.WORKER)) {
             if (isBallerinaModule(env.enclPkg)) {
                 dlog.warning(funcNode.pos, DiagnosticWarningCode.FUNCTION_CAN_BE_MARKED_ISOLATED, funcNode.name);
             }
 
-            if (isolationInferenceInfo != null) {
+            if (isolationInferenceInfo != null &&
+                    isolationInferenceInfo.dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility) {
                 isolationInferenceInfo.inferredIsolated = true;
             }
         }
@@ -1193,7 +1196,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
 
         boolean inIsolatedFunction = isInIsolatedFunction(enclInvokable);
         boolean recordFieldDefaultValue = isRecordFieldDefaultValue(enclType);
-        boolean objectFieldDefaultValue = !recordFieldDefaultValue && isObjectFieldDefaultValueRequiringIsolation(env);
+        boolean objectFieldDefaultValueRequiringIsolation = !recordFieldDefaultValue &&
+                isObjectFieldDefaultValueRequiringIsolation(env);
 
         SymbolEnv enclEnv = env.enclEnv;
         if (inIsolatedFunction) {
@@ -1208,7 +1212,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             }
         }
 
-        if (!recordFieldDefaultValue && !objectFieldDefaultValue && enclInvokable != null &&
+        if (!recordFieldDefaultValue && !objectFieldDefaultValueRequiringIsolation && enclInvokable != null &&
                 isReferenceToVarDefinedInSameInvokable(symbol.owner, enclInvokable.symbol)) {
             return;
         }
@@ -1245,7 +1249,24 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
         }
 
         if (accessOfIsolationInferableConstruct) {
-            markDependentlyIsolatedOnVar(symbol);
+            if (isObjectFieldDefaultValue(env)) {
+                BLangFunction initMethod = ((BLangClassDefinition) env.node).initFunction;
+                if (initMethod != null) {
+                    BInvokableSymbol initMethodSymbol = initMethod.symbol;
+                    IsolationInferenceInfo inferenceInfo;
+                    if (isolationInferenceInfoMap.containsKey(initMethodSymbol)) {
+                        inferenceInfo = isolationInferenceInfoMap.get(initMethodSymbol);
+                    } else {
+                        inferenceInfo = new IsolationInferenceInfo();
+                        isolationInferenceInfoMap.put(((BLangClassDefinition) env.node).initFunction.symbol,
+                                                      inferenceInfo);
+
+                    }
+                    inferenceInfo.dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility = false;
+                }
+            } else {
+                markDependentlyIsolatedOnVar(symbol);
+            }
         } else {
             markDependsOnIsolationNonInferableConstructs();
         }
@@ -1261,7 +1282,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             dlog.error(varRefExpr.pos, DiagnosticErrorCode.INVALID_MUTABLE_ACCESS_AS_RECORD_DEFAULT);
         }
 
-        if (objectFieldDefaultValue) {
+        if (objectFieldDefaultValueRequiringIsolation) {
             dlog.error(varRefExpr.pos, DiagnosticErrorCode.INVALID_MUTABLE_ACCESS_AS_OBJECT_DEFAULT);
         }
     }
@@ -2281,14 +2302,11 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
     }
 
     private boolean isObjectFieldDefaultValueRequiringIsolation(SymbolEnv env) {
-        BLangNode node = env.node;
-        NodeKind kind = node.getKind();
-
-        if (kind != NodeKind.CLASS_DEFN) {
+        if (!isObjectFieldDefaultValue(env)) {
             return false;
         }
 
-        BLangClassDefinition classDefinition = (BLangClassDefinition) node;
+        BLangClassDefinition classDefinition = (BLangClassDefinition) env.node;
 
         BLangFunction initFunction = classDefinition.initFunction;
         if (initFunction == null) {
@@ -2296,6 +2314,17 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
         }
 
         return isIsolated(initFunction.symbol.flags);
+    }
+
+    private boolean isObjectFieldDefaultValue(SymbolEnv env) {
+        BLangNode node = env.node;
+        NodeKind kind = node.getKind();
+
+        if (kind != NodeKind.CLASS_DEFN) {
+            return false;
+        }
+
+        return true;
     }
 
     private boolean isDefinitionReference(BSymbol symbol) {
