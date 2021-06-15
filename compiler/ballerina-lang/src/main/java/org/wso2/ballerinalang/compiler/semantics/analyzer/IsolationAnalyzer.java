@@ -3284,6 +3284,9 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
                 }
             }
         }
+
+        this.isolationInferenceInfoMap.clear();
+        this.nonPublicPotentiallyIsolatedConstructs.clear();
     }
 
     private boolean inferredIsolated(BSymbol symbol, IsolationInferenceInfo isolationInferenceInfo,
