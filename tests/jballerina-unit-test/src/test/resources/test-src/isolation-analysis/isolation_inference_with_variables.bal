@@ -1,4 +1,4 @@
-// Copyright (c) 2020 WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+// Copyright (c) 2021 WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 //
 // WSO2 Inc. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -18,9 +18,9 @@ import ballerina/lang.array;
 
 int[] a = getIntArray();
 
-isolated int[][] b = [a.cloneReadOnly(), getIntArray()];
+int[][] b = [a.cloneReadOnly(), getIntArray()];
 
-isolated record {
+record {
     int[] i;
     boolean[] j;
 } c = {
@@ -28,23 +28,23 @@ isolated record {
     j: getBooleanArray(<int[2]> getIntArray())
 };
 
-isolated object {
+object {
     int[] i;
     string[] j;
 } d = object {
     int[] i = getIntArray();
     string[] j;
 
-    isolated function init() {
+    function init() {
         self.j = [];
     }
 };
 
-isolated NonIsolatedObject e = new NonIsolatedClassWithIsolatedInit(getIntArray(), ["hello", "world"]);
+NonIsolatedObject e = new NonIsolatedClassWithIsolatedInit(getIntArray(), ["hello", "world"]);
 
 final readonly & int[] x = [1, 2, 3];
 
-isolated function getIntArray() returns int[] => x;
+function getIntArray() returns int[] => x;
 
 type NonIsolatedObject object {
     int[] i;
@@ -86,20 +86,21 @@ function testIsolatedVariableAccessInLock(boolean bool) {
     }
 }
 
-isolated function testAccessingIsolatedVariableInIsolatedFunction() {
+function testAccessingIsolatedVariableInIsolatedFunction() returns function (int) {
     lock {
         int[][] arr = b.cloneReadOnly();
     }
 
-    var fn = isolated function (int i) {
+    var fn = function (int i) {
         lock {
             int[][] clone = b.clone();
             clone.push([i]);
         }
     };
+    return fn;
 }
 
-isolated int[] stack = [];
+int[] stack = [];
 
 int[][] allStacks = [];
 
@@ -110,21 +111,27 @@ function testValidTransferOutInLockAccessingIsolatedVar() {
     }
 }
 
-isolated int[][] isolatedStacks = [];
+function addToAllStacks() {
+    lock {
+        stack.push(0);
+    }
+}
 
-isolated function testValidTransferInUpdatingIsolatedVar(int[] n) {
+int[][] isolatedStacks = [];
+
+function testValidTransferInUpdatingIsolatedVar(int[] n) {
     lock {
         isolatedStacks.push(n.cloneReadOnly());
     }
 }
 
-isolated function testValidTransferOutUpdatingOfIsolatedVarClone() returns int[][] {
+function testValidTransferOutUpdatingOfIsolatedVarClone() returns int[][] {
     lock {
         return isolatedStacks.clone();
     }
 }
 
-isolated function testValidTransferOutUpdatingOfIsolatedVarMember(int index, boolean b) returns int[] {
+function testValidTransferOutUpdatingOfIsolatedVarMember(int index, boolean b) returns int[] {
     lock {
         if b {
             return isolatedStacks.cloneReadOnly()[index + 1];
@@ -139,13 +146,13 @@ function testValidTransferInAsArgInLockAccessingIsolatedVar(int[] n) {
     }
 }
 
-isolated function update(int[][] x, int[] y) {
+function update(int[][] x, int[] y) {
     x.push(y);
 }
 
-isolated map<int> isolatedModuleLevelMap = {};
+map<int> isolatedModuleLevelMap = {};
 
-isolated function copyInInMethodCall1() returns map<int>[] {
+function copyInInMethodCall1() returns map<int>[] {
     map<int>[] y = [];
 
     lock {
@@ -176,54 +183,40 @@ function copyOutAccessingIsolatedVar() returns map<int>[] {
      }
 }
 
-isolated int[] i = [1, 2];
+public function testIsolatedInference() {
+    assertTrue(getIntArray is isolated function() returns int[]);
+    assertTrue(testAccessingIsolatedVariableInIsolatedFunction is isolated function() returns function (int));
+    assertTrue(testAccessingIsolatedVariableInIsolatedFunction() is isolated function(int));
+    assertFalse(testValidTransferOutInLockAccessingIsolatedVar is isolated function());
+    assertFalse(<any> addToAllStacks is isolated function);
+    assertTrue(<any> testValidTransferInUpdatingIsolatedVar is isolated function);
+    assertTrue(<any> testValidTransferOutUpdatingOfIsolatedVarClone is isolated function);
+    assertTrue(<any> testValidTransferOutUpdatingOfIsolatedVarMember is isolated function);
+    assertTrue(<any> update is isolated function);
+    assertTrue(<any> testValidTransferInAsArgInLockAccessingIsolatedVar is isolated function);
+    assertTrue(<any> copyInInMethodCall1 is isolated function);
+    assertTrue(<any> copyInInMethodCall2 is isolated function);
+    assertTrue(<any> copyOutAccessingIsolatedVar is isolated function);
+}
 
-isolated function testIsolationAnalysisWithOnFailStatement() {
-    do {
+isolated function assertTrue(any|error actual) {
+    assertEquality(true, actual);
+}
 
-    } on fail error e {
-        lock {
-            int k = i.pop();
-        }
+isolated function assertFalse(any|error actual) {
+    assertEquality(false, actual);
+}
+
+isolated function assertEquality(any|error expected, any|error actual) {
+    if expected is anydata && actual is anydata && expected == actual {
+        return;
     }
 
-    anydata l = 1;
-    lock {
-        anydata val = l.clone();
-        match val {
-            "1" => {
-                lock {
-                    int k = check int:fromString(val.toString()) + i[0];
-                }
-            }
-        } on fail var e {
-            i.push(e.message().length());
-        }
+    if expected === actual {
+        return;
     }
 
-    foreach var item in 1 ..< 2 {
-
-    } on fail error e {
-        lock {
-            i.push(1);
-        }
-    }
-
-    int m = 1;
-
-    while m < 2 {
-        m += 1;
-    } on fail error e {
-        lock {
-            i.push(m);
-        }
-    }
-
-    lock {
-        lock {
-
-        } on fail error e {
-            i[i.length()] = 1;
-        }
-    }
+    string expectedValAsString = expected is error ? expected.toString() : expected.toString();
+    string actualValAsString = actual is error ? actual.toString() : actual.toString();
+    panic error("expected '" + expectedValAsString + "', found '" + actualValAsString + "'");
 }
