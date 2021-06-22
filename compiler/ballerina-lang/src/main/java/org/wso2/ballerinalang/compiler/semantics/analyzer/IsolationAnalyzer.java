@@ -3175,8 +3175,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             return;
         }
 
-        isolationInferenceInfoMap.get(enclInvokableSymbol)
-                .dependsOnlyOnInferableConstructs = false;
+        isolationInferenceInfoMap.get(enclInvokableSymbol).dependsOnlyOnInferableConstructs = false;
     }
 
     private void analyzeFunctionForInference(BInvokableSymbol symbol) {
@@ -3285,7 +3284,22 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
         Set<BLangIdentifier> protectedFields = new HashSet<>();
         Set<BSymbol> dependentObjectTypes = new HashSet<>();
 
+        Map<String, BLangSimpleVariable> fields = new HashMap<>();
+
         for (BLangSimpleVariable field : classDefinition.fields) {
+            fields.put(field.name.value, field);
+        }
+
+        for (BLangSimpleVariable referencedField : classDefinition.referencedFields) {
+            String name = referencedField.name.value;
+            if (fields.containsKey(name)) {
+                continue;
+            }
+
+            fields.put(name, referencedField);
+        }
+
+        for (BLangSimpleVariable field : fields.values()) {
             boolean isFinal = field.flagSet.contains(Flag.FINAL);
             boolean isPrivate = field.flagSet.contains(Flag.PRIVATE);
 
