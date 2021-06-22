@@ -420,7 +420,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             }
 
             if (functionIsolationInferenceInfo != null &&
-                    functionIsolationInferenceInfo.dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility) {
+                    functionIsolationInferenceInfo.dependsOnlyOnInferableConstructs) {
                 functionIsolationInferenceInfo.inferredIsolated = true;
             }
         }
@@ -1030,7 +1030,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             prevCopyInLockInfo.nonCaptureBindingPatternVarRefsOnLhs.addAll(
                     copyInLockInfo.nonCaptureBindingPatternVarRefsOnLhs);
             prevCopyInLockInfo.nonIsolatedTransferInExpressions.addAll(copyInLockInfo.nonIsolatedTransferInExpressions);
-            prevCopyInLockInfo.nonIsolatedTransferOutExpressions.addAll(copyInLockInfo.nonIsolatedTransferOutExpressions);
+            prevCopyInLockInfo.nonIsolatedTransferOutExpressions.addAll(
+                    copyInLockInfo.nonIsolatedTransferOutExpressions);
             prevCopyInLockInfo.nonIsolatedInvocations.addAll(copyInLockInfo.nonIsolatedInvocations);
             prevCopyInLockInfo.accessedPotentiallyIsolatedVars.addAll(copyInLockInfo.accessedPotentiallyIsolatedVars);
         }
@@ -1307,7 +1308,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
                                                       inferenceInfo);
 
                     }
-                    inferenceInfo.dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility = false;
+                    inferenceInfo.dependsOnlyOnInferableConstructs = false;
                 }
             } else {
                 markDependentlyIsolatedOnVar(symbol);
@@ -2528,7 +2529,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
                     }
 
                     if (isIsolatedExpression((BLangRecordLiteral.BLangRecordVarNameField) field, logErrors,
-                                             visitRestOnError, nonIsolatedExpressions) || logErrors || visitRestOnError) {
+                                             visitRestOnError, nonIsolatedExpressions) || logErrors ||
+                                             visitRestOnError) {
                         continue;
                     }
                     return false;
@@ -2599,8 +2601,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
                 return true;
             case XML_SEQUENCE_LITERAL:
                 for (BLangExpression xmlItem : ((BLangXMLSequenceLiteral) expression).xmlItems) {
-                    if (isIsolatedExpression(xmlItem, logErrors, visitRestOnError, nonIsolatedExpressions) || logErrors ||
-                            visitRestOnError) {
+                    if (isIsolatedExpression(xmlItem, logErrors, visitRestOnError, nonIsolatedExpressions) ||
+                            logErrors || visitRestOnError) {
                         continue;
                     }
 
@@ -2745,8 +2747,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
                         return false;
                     }
 
-                    if (isIsolatedExpression(restArg, logErrors, visitRestOnError, nonIsolatedExpressions) || logErrors ||
-                            visitRestOnError) {
+                    if (isIsolatedExpression(restArg, logErrors, visitRestOnError, nonIsolatedExpressions) ||
+                            logErrors || visitRestOnError) {
                         continue;
                     }
                     return false;
@@ -2907,7 +2909,8 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             return;
         }
 
-        validateTransferOutViaAssignment(expr, varRef, this.copyInLockInfoStack.peek().nonIsolatedTransferOutExpressions);
+        validateTransferOutViaAssignment(expr, varRef,
+                                         this.copyInLockInfoStack.peek().nonIsolatedTransferOutExpressions);
     }
 
     private boolean isSelfReference(BLangExpression expression) {
@@ -3173,7 +3176,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
         }
 
         isolationInferenceInfoMap.get(enclInvokableSymbol)
-                .dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility = false;
+                .dependsOnlyOnInferableConstructs = false;
     }
 
     private void analyzeFunctionForInference(BInvokableSymbol symbol) {
@@ -3609,7 +3612,10 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
         return true;
     }
 
-    private boolean isFinalVarOfReadOnlyOrIsolatedObjectTypeWIthInference(Set<BType> publiclyExposedObjectTypes, List<BLangClassDefinition> classDefinitions, BSymbol symbol, Set<BSymbol> unresolvedSymbols) {
+    private boolean isFinalVarOfReadOnlyOrIsolatedObjectTypeWIthInference(Set<BType> publiclyExposedObjectTypes,
+                                                                          List<BLangClassDefinition> classDefinitions,
+                                                                          BSymbol symbol,
+                                                                          Set<BSymbol> unresolvedSymbols) {
         return Symbols.isFlagOn(symbol.flags, Flags.FINAL) &&
                 isSubTypeOfReadOnlyOrIsolatedObjectUnionWithInference(publiclyExposedObjectTypes, classDefinitions,
                                                                       true, symbol.type, unresolvedSymbols);
@@ -3654,7 +3660,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             return true;
         }
 
-        if (!functionIsolationInferenceInfo.dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility) {
+        if (!functionIsolationInferenceInfo.dependsOnlyOnInferableConstructs) {
             return false;
         }
 
@@ -3776,7 +3782,7 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
     }
 
     private static class IsolationInferenceInfo {
-        boolean dependsOnlyOnFunctionsAndModuleLevelVariablesWithModuleLevelVisibility = true;
+        boolean dependsOnlyOnInferableConstructs = true;
         Set<BInvokableSymbol> dependsOnFunctions = new HashSet<>();
         Set<BSymbol> dependsOnVariablesAndClasses = new HashSet<>();
         boolean inferredIsolated = false;
