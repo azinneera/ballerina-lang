@@ -3455,8 +3455,6 @@ public class IsolationAnalyzer extends BLangNodeVisitor {
             collector.visitType(function.getBType());
         }
 
-
-
         return publiclyExposedTypes;
     }
 
