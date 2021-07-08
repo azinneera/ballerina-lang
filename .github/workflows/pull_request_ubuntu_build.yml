@@ -10,6 +10,7 @@ on:
       - ballerina-1.2.x
       - stage-slbeta2
       - project_api
+      - lookahead-4
 
 jobs:
   ubuntu_build:
