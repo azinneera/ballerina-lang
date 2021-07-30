@@ -20,6 +20,7 @@ package io.ballerina.projects.internal.environment;
 
 import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDependencyScope;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.Project;
@@ -31,14 +32,17 @@ import io.ballerina.projects.environment.PackageResolver;
 import io.ballerina.projects.environment.ResolutionRequest;
 import io.ballerina.projects.environment.ResolutionResponse;
 import io.ballerina.projects.environment.ResolutionResponse.ResolutionStatus;
+import io.ballerina.projects.internal.DependencyVersionKind;
 import io.ballerina.projects.internal.ImportModuleRequest;
 import io.ballerina.projects.internal.ImportModuleResponse;
+import io.ballerina.projects.internal.PackageDependencyGraphBuilder;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Default Package resolver for Ballerina project.
@@ -116,7 +120,10 @@ public class DefaultPackageResolver implements PackageResolver {
 
     @Override
     public DependencyGraph<PackageDescriptor> resolveDependencies(List<ResolutionRequest> packageLoadRequests,
-                                                                  PackageLockingMode packageLockingMode) {
+                                                                  PackageLockingMode packageLockingMode,
+                                                                  Project project) {
+        Package rootPackage = project.currentPackage();
+
         // Foreach repo
         // resolve immediate dependencies
         // if version is not there resolve latest major version
@@ -129,7 +136,38 @@ public class DefaultPackageResolver implements PackageResolver {
         // some of the dependencies might not exists so we should have an unresolved package descriptor
         // Once we have all the graphs from different repos we should consolidate
         //      When consolidating we will use the locking rules
-        return null;
+
+        DependencyGraph<PackageDescriptor> distRepoDependencyGraph =
+                ballerinaDistRepo.resolveDependencies(packageLoadRequests, packageLockingMode, rootPackage);
+        DependencyGraph<PackageDescriptor> centralRepoDependencyGraph =
+                ballerinaCentralRepo.resolveDependencies(packageLoadRequests, packageLockingMode, rootPackage);
+        PackageDependencyGraphBuilder graphBuilder = new PackageDependencyGraphBuilder();
+
+        for (PackageDescriptor nodeInDist : distRepoDependencyGraph.getNodes()) {
+            for (PackageDescriptor nodeInCentral : centralRepoDependencyGraph.getNodes()) {
+                if (nodeInDist.org().equals(nodeInCentral.org()) && nodeInDist.name().equals(nodeInCentral.name())) {
+                    if (nodeInDist.version().compareTo(nodeInCentral.version())
+                            .equals(SemanticVersion.VersionCompatibilityResult.LESS_THAN)) {
+                        graphBuilder.addNode(nodeInCentral, PackageDependencyScope.DEFAULT,
+                                DependencyVersionKind.LATEST);
+                        continue;
+                    }
+                    graphBuilder.addNode(nodeInDist, PackageDependencyScope.DEFAULT, DependencyVersionKind.LATEST);
+                }
+            }
+        }
+
+        Set<PackageDescriptor> unresolvedInDistRepo = centralRepoDependencyGraph.difference(distRepoDependencyGraph);
+        for (PackageDescriptor unresolvedDescriptor : unresolvedInDistRepo) {
+            for (PackageDescriptor nodeInCentral : centralRepoDependencyGraph.getNodes()) {
+                if (nodeInCentral.org().equals(unresolvedDescriptor.org())
+                        && nodeInCentral.name().equals(unresolvedDescriptor.name())) {
+                    graphBuilder.addNode(nodeInCentral, PackageDependencyScope.DEFAULT, DependencyVersionKind.LATEST);
+                }
+            }
+
+        }
+        return graphBuilder.build();
     }
 
     @Override

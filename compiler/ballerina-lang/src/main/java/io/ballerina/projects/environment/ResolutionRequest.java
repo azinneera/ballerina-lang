@@ -18,6 +18,7 @@
 
 package io.ballerina.projects.environment;
 
+import io.ballerina.projects.DependencyResolutionType;
 import io.ballerina.projects.PackageDependencyScope;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageName;
@@ -36,16 +37,24 @@ public final class ResolutionRequest {
     private final PackageDescriptor packageDesc;
     private final PackageDependencyScope scope;
     private final boolean offline;
+    private final DependencyResolutionType dependencyResolutionType;
 
-    private ResolutionRequest(PackageDescriptor packageDescriptor, PackageDependencyScope scope, boolean offline) {
+    private ResolutionRequest(PackageDescriptor packageDescriptor, PackageDependencyScope scope, boolean offline,
+                              DependencyResolutionType dependencyResolutionType) {
         this.packageDesc = packageDescriptor;
         this.scope = scope;
         this.offline = offline;
+        this.dependencyResolutionType = dependencyResolutionType;
     }
 
     public static ResolutionRequest from(PackageDescriptor packageDescriptor, PackageDependencyScope scope,
                                          boolean offline) {
-        return new ResolutionRequest(packageDescriptor, scope, offline);
+        return new ResolutionRequest(packageDescriptor, scope, offline, DependencyResolutionType.SOURCE);
+    }
+
+    public static ResolutionRequest from(PackageDescriptor packageDescriptor, PackageDependencyScope scope,
+                                         boolean offline, DependencyResolutionType dependencyResolutionType) {
+        return new ResolutionRequest(packageDescriptor, scope, offline, dependencyResolutionType);
     }
 
     public PackageOrg orgName() {
@@ -74,6 +83,10 @@ public final class ResolutionRequest {
 
     public boolean offline() {
         return offline;
+    }
+
+    public DependencyResolutionType dependencyResolutionType() {
+        return dependencyResolutionType;
     }
 
     @Override

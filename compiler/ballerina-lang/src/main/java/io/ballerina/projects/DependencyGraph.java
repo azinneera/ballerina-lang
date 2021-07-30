@@ -67,7 +67,7 @@ public class DependencyGraph<T> {
      * @return the set of nodes that needs to be deleted from this graph to
      *          to get the other graph
      */
-    Set<T> difference(DependencyGraph<T> other) {
+    public Set<T> difference(DependencyGraph<T> other) {
         // If the diff is empty, either this graph is equivalent to or a subset
         // of the other graph, no deletion of nodes required to convert this to the other.
         // Else, the node set in diff should be removed from this graph to convert it to

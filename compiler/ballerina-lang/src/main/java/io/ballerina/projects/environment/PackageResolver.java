@@ -36,7 +36,7 @@ public interface PackageResolver {
     List<ImportModuleResponse> resolvePackageNames(List<ImportModuleRequest> importModuleRequests);
 
     DependencyGraph<PackageDescriptor> resolveDependencies(List<ResolutionRequest> packageLoadRequests,
-                                                           PackageLockingMode packageLockingMode);
+                                                           PackageLockingMode packageLockingMode, Project project);
 
     List<ResolutionResponse> resolvePackages(List<ResolutionRequest> packageLoadRequests);
 

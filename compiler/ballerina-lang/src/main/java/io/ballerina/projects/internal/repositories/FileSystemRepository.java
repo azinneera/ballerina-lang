@@ -17,16 +17,23 @@
  */
 package io.ballerina.projects.internal.repositories;
 
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDependencyScope;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.environment.Environment;
+import io.ballerina.projects.environment.PackageLockingMode;
 import io.ballerina.projects.environment.PackageRepository;
 import io.ballerina.projects.environment.ResolutionRequest;
+import io.ballerina.projects.internal.DependencyVersionKind;
+import io.ballerina.projects.internal.PackageDependencyGraphBuilder;
 import io.ballerina.projects.repos.FileSystemCache;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
@@ -174,6 +181,57 @@ public class FileSystemRepository implements PackageRepository {
         return packagesMap;
     }
 
+    @Override
+    public DependencyGraph<PackageDescriptor> resolveDependencies(
+            List<ResolutionRequest> packageLoadRequests, PackageLockingMode packageLockingMode, Package rootPackage) {
+        PackageDependencyGraphBuilder graphBuilder = new PackageDependencyGraphBuilder(rootPackage.descriptor());
+        for (ResolutionRequest packageLoadRequest : packageLoadRequests) {
+            List<PackageVersion> packageVersions = getPackageVersions(packageLoadRequest);
+            if (!packageVersions.isEmpty()) {
+                PackageVersion latest = findLatest(packageLoadRequest, packageVersions, packageLockingMode);
+                PackageDescriptor newDescriptor = PackageDescriptor.from(
+                        packageLoadRequest.orgName(), packageLoadRequest.packageName(), latest);
+                graphBuilder.addDependency(
+                        rootPackage.descriptor(),
+                        newDescriptor,
+                        PackageDependencyScope.DEFAULT, // todo
+                        packageLoadRequest.dependencyResolutionType(),
+                        DependencyVersionKind.LATEST);
+
+                // resolve transitives of this direct dependency and add to dependency graph
+                ResolutionRequest newResolutionRequest = ResolutionRequest.from(
+                        newDescriptor,
+                        packageLoadRequest.scope(),
+                        packageLoadRequest.offline(),
+                        packageLoadRequest.dependencyResolutionType());
+                Optional<Package> optionalPackage = getPackage(newResolutionRequest);
+                if (optionalPackage.isPresent()) {
+                    List<PackageDescriptor> sortedList = optionalPackage.get().pkgDescDependencyGraph()
+                            .toTopologicallySortedList().stream().filter(packageDescriptor ->
+                            !packageDescriptor.equals(packageLoadRequest.packageDescriptor()))
+                            .collect(Collectors.toList());
+                    for (PackageDescriptor packageDescriptor : sortedList) {
+                        ResolutionRequest resolutionRequest = ResolutionRequest.from(
+                                packageDescriptor, PackageDependencyScope.DEFAULT, packageLoadRequest.offline());
+                        List<PackageVersion> dependencyVersions = getPackageVersions(resolutionRequest);
+                        PackageVersion dependencyLatest =
+                                findLatest(resolutionRequest, dependencyVersions, packageLockingMode);
+                        PackageDescriptor newDepDescriptor = PackageDescriptor.from(
+                                packageDescriptor.org(), packageDescriptor.name(), dependencyLatest);
+                        graphBuilder.addDependency(
+                                packageLoadRequest.packageDescriptor(),
+                                newDepDescriptor,
+                                PackageDependencyScope.DEFAULT, // todo
+                                packageLoadRequest.dependencyResolutionType(),
+                                DependencyVersionKind.LATEST);
+                    }
+                }
+            }
+        }
+
+        return graphBuilder.build();
+    }
+
     private List<PackageVersion> pathToVersions(List<Path> versions) {
         List<PackageVersion> availableVersions = new ArrayList<>();
         versions.stream().map(path -> Optional.ofNullable(path)
@@ -190,5 +248,54 @@ public class FileSystemRepository implements PackageRepository {
                     }
         });
         return availableVersions;
+    }
+
+    private PackageVersion findLatest(ResolutionRequest resolutionRequest, List<PackageVersion> packageVersions,
+                                      PackageLockingMode packageLockingMode) {
+        if (resolutionRequest.version().isEmpty()) {
+            return findLatest(packageVersions);
+        }
+        if (packageLockingMode.equals(PackageLockingMode.SOFT)) {
+            return findLatest(packageVersions);
+        }
+        if (packageLockingMode.equals(PackageLockingMode.MEDIUM)) {
+            SemanticVersion semVer = SemanticVersion.from(resolutionRequest.version().get().toString());
+            List<PackageVersion> filteredPackageVersions = packageVersions.stream().filter(packageVersion -> {
+                SemanticVersion semVerOther = SemanticVersion.from(packageVersion.toString());
+                return (semVer.major() == semVerOther.major()
+                        && semVer.minor() == semVerOther.minor()
+                        && !semVerOther.lessThan(semVer));
+            }).collect(Collectors.toList());
+            return findLatest(filteredPackageVersions);
+        }
+        return null;
+    }
+
+    private PackageVersion findLatest(List<PackageVersion> packageVersions) {
+        if (packageVersions.isEmpty()) {
+            return null;
+        }
+
+        PackageVersion latestVersion = packageVersions.get(0);
+        for (PackageVersion pkgVersion : packageVersions) {
+            latestVersion = getLatest(latestVersion, pkgVersion);
+        }
+        return latestVersion;
+    }
+
+    private static PackageVersion getLatest(PackageVersion v1, PackageVersion v2) {
+        SemanticVersion semVer1 = v1.value();
+        SemanticVersion semVer2 = v2.value();
+        boolean isV1PreReleaseVersion = semVer1.isPreReleaseVersion();
+        boolean isV2PreReleaseVersion = semVer2.isPreReleaseVersion();
+        if (isV1PreReleaseVersion ^ isV2PreReleaseVersion) {
+            // Only one version is a pre-release version
+            // Return the version which is not a pre-release version
+            return isV1PreReleaseVersion ? v2 : v1;
+        } else {
+            // Both versions are pre-release versions or both are not pre-release versions
+            // Find the the latest version
+            return semVer1.greaterThanOrEqualTo(semVer2) ? v1 : v2;
+        }
     }
 }

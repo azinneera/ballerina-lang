@@ -149,6 +149,10 @@ public class Package {
         return packageContext.packageDependencies();
     }
 
+    public DependencyGraph<PackageDescriptor> pkgDescDependencyGraph() {
+        return packageContext.dependencyGraph();
+    }
+
     public CompilationOptions compilationOptions() {
         return packageContext.compilationOptions();
     }
