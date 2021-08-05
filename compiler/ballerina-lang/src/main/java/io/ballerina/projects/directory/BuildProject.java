@@ -30,6 +30,7 @@ import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
+import io.ballerina.projects.environment.PackageLockingMode;
 import io.ballerina.projects.internal.PackageConfigCreator;
 import io.ballerina.projects.internal.ProjectFiles;
 import io.ballerina.projects.internal.model.Dependency;
@@ -45,6 +46,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static io.ballerina.projects.util.ProjectConstants.DEPENDENCIES_TOML;
 import static io.ballerina.projects.util.ProjectUtils.getDependenciesTomlContent;
@@ -100,9 +102,34 @@ public class BuildProject extends Project {
                                     BuildOptions buildOptions) {
         PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(projectPath);
         BuildOptions mergedBuildOptions = ProjectFiles.createBuildOptions(packageConfig, buildOptions, projectPath);
+
+        getLockingMode(packageConfig, mergedBuildOptions);
+
+
         BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions);
         buildProject.addPackage(packageConfig);
         return buildProject;
+    }
+
+    private static void getLockingMode(PackageConfig packageConfig, BuildOptions mergedBuildOptions) {
+        PackageLockingMode lockingMode;
+        if (packageConfig.dependenciesToml().isPresent()) {
+            if (mergedBuildOptions.sticky()) {
+                lockingMode = PackageLockingMode.HARD;
+            } else {
+                Path depTomlPath = packageConfig.packagePath().resolve(DEPENDENCIES_TOML);
+                long lastModified = depTomlPath.toFile().lastModified();
+                long diff = TimeUnit.HOURS.convert(System.currentTimeMillis() - lastModified,
+                        TimeUnit.MILLISECONDS);
+                if (diff < 24) {
+                    lockingMode = PackageLockingMode.HARD;
+                } else {
+                    lockingMode = PackageLockingMode.MEDIUM;
+                }
+            }
+        } else {
+            lockingMode = PackageLockingMode.SOFT;
+        }
     }
 
     private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions) {

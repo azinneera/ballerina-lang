@@ -29,6 +29,7 @@ public class BuildOptionsBuilder {
     private Boolean codeCoverage;
     private Boolean dumpBuildTime;
     private final CompilationOptionsBuilder compilationOptionsBuilder;
+    private Boolean sticky;
 
     public BuildOptionsBuilder() {
         compilationOptionsBuilder = new CompilationOptionsBuilder();
@@ -46,6 +47,11 @@ public class BuildOptionsBuilder {
 
     public BuildOptionsBuilder dumpBuildTime(Boolean value) {
         dumpBuildTime = value;
+        return this;
+    }
+
+    public BuildOptionsBuilder sticky(Boolean value) {
+        sticky = value;
         return this;
     }
 
@@ -91,6 +97,6 @@ public class BuildOptionsBuilder {
 
     public BuildOptions build() {
         CompilationOptions compilationOptions = compilationOptionsBuilder.build();
-        return new BuildOptions(testReport, codeCoverage, dumpBuildTime, compilationOptions);
+        return new BuildOptions(testReport, codeCoverage, dumpBuildTime, sticky, compilationOptions);
     }
 }

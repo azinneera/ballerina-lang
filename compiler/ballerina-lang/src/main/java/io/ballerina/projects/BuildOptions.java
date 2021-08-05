@@ -26,14 +26,20 @@ public class BuildOptions {
     private Boolean testReport;
     private Boolean codeCoverage;
     private Boolean dumpBuildTime;
+    private Boolean sticky;
     private CompilationOptions compilationOptions;
 
-    BuildOptions(Boolean testReport, Boolean codeCoverage, Boolean dumpBuildTime,
+    BuildOptions(Boolean testReport, Boolean codeCoverage, Boolean dumpBuildTime, Boolean sticky,
                  CompilationOptions compilationOptions) {
         this.testReport = testReport;
         this.codeCoverage = codeCoverage;
         this.dumpBuildTime = dumpBuildTime;
+        this.sticky = sticky;
         this.compilationOptions = compilationOptions;
+    }
+
+    public Boolean sticky() {
+        return sticky;
     }
 
     public boolean testReport() {
@@ -90,6 +96,8 @@ public class BuildOptions {
                 theirOptions.testReport, () -> toBooleanDefaultIfNull(this.testReport));
         this.dumpBuildTime = Objects.requireNonNullElseGet(
                 theirOptions.dumpBuildTime, () -> toBooleanDefaultIfNull(this.dumpBuildTime));
+        this.sticky = Objects.requireNonNullElseGet(
+                theirOptions.sticky, () -> toBooleanDefaultIfNull(this.sticky));
         this.compilationOptions = compilationOptions.acceptTheirs(theirOptions.compilationOptions());
 
         return this;
@@ -108,7 +116,8 @@ public class BuildOptions {
     public enum OptionName {
         TEST_REPORT("testReport"),
         CODE_COVERAGE("codeCoverage"),
-        DUMP_BUILD_TIME("dumpBuildTime")
+        DUMP_BUILD_TIME("dumpBuildTime"),
+        STICKY("sticky")
         ;
 
         private String name;

@@ -168,6 +168,11 @@ public class PackageResolution {
      * @return package dependency graph of this package
      */
     private DependencyGraph<ResolvedPackageDependency> buildDependencyGraph() {
+
+        
+
+
+
         // TODO We should get diagnostics as well. Need to design that contract
         if (rootPackageContext.project().kind() == ProjectKind.BALA_PROJECT) {
             createDependencyGraphFromBALA();

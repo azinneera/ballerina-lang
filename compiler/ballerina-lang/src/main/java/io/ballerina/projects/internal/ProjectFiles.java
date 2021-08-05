@@ -22,6 +22,7 @@ import io.ballerina.projects.BuildOptionsBuilder;
 import io.ballerina.projects.PackageConfig;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.TomlDocument;
+import io.ballerina.projects.environment.PackageLockingMode;
 import io.ballerina.projects.exceptions.InvalidBalaException;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
