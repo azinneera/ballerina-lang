@@ -40,7 +40,11 @@ import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 import io.ballerina.tools.diagnostics.Location;
 import org.wso2.ballerinalang.compiler.util.Names;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -134,6 +138,32 @@ public class PackageResolution {
     }
 
     List<ModuleContext> topologicallySortedModuleList() {
+        Path sortOrderFile = this.rootPackageContext.project().sourceRoot().resolve("sort-order.txt");
+        try {
+            if (Files.exists(sortOrderFile)) {
+                String content = Files.readString(sortOrderFile);
+                String[] sortList = content.split("\n");
+
+                List<ModuleContext> fixedOrder = new ArrayList<>();
+                for (String item : sortList) {
+                    for (ModuleContext moduleContext : topologicallySortedModuleList) {
+                        if (moduleContext.project().currentPackage().descriptor().toString().equals(item)) {
+                            fixedOrder.add(moduleContext);
+                        }
+
+                    }
+                }
+                return fixedOrder;
+            } else {
+                StringBuilder stringBuilder = new StringBuilder();
+                topologicallySortedModuleList.forEach(moduleContext -> stringBuilder
+                        .append(moduleContext.project().currentPackage().descriptor().toString()).append("\n"));
+
+                Files.writeString(sortOrderFile, stringBuilder.toString());
+            }
+        } catch (IOException e) {
+            throw new ProjectException(e);
+        }
         return topologicallySortedModuleList;
     }
 

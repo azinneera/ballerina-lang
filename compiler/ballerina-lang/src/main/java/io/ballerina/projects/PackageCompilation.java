@@ -179,7 +179,9 @@ public class PackageCompilation {
         // add manifest diagnostics
         diagnostics.addAll(packageContext().manifest().diagnostics().allDiagnostics);
         // add compilation diagnostics
+        System.out.println("---------------sorted order----------------------");
         for (ModuleContext moduleContext : packageResolution.topologicallySortedModuleList()) {
+            System.out.println(moduleContext.moduleName().toString());
             moduleContext.compile(compilerContext);
             for (Diagnostic diagnostic : moduleContext.diagnostics()) {
                 diagnostics.add(new PackageDiagnostic(diagnostic, moduleContext.descriptor(), moduleContext.project()));
