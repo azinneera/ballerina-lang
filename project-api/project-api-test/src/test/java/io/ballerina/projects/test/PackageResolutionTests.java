@@ -85,7 +85,7 @@ public class PackageResolutionTests extends BaseTest {
     public void testProjectWithZeroDependencies() {
         // package_c --> {}
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_c");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics
@@ -102,7 +102,7 @@ public class PackageResolutionTests extends BaseTest {
     public void testProjectWithOneDependency() {
         // package_b --> package_c
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_b");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics
@@ -119,7 +119,7 @@ public class PackageResolutionTests extends BaseTest {
     public void testProjectWithOneTransitiveDependency() {
         // package_a --> package_b --> package_c
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_a");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics
@@ -137,7 +137,7 @@ public class PackageResolutionTests extends BaseTest {
         // package_d --> package_b --> package_c
         // package_d --> package_e
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_d");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics
@@ -162,7 +162,7 @@ public class PackageResolutionTests extends BaseTest {
         BCompileUtil.copyBalaToDistRepository(balaPath, "samjs", "package_kk", "1.0.0");
 
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_missing_transitive_dep");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         buildProject.currentPackage().getResolution();
     }
 
@@ -170,7 +170,7 @@ public class PackageResolutionTests extends BaseTest {
     public void testProjectWithTransitiveTestDependencies() throws IOException {
         // package_with_test_dependency --> package_c
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_with_test_dependency");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Dependency graph should contain two entries here
@@ -287,7 +287,7 @@ public class PackageResolutionTests extends BaseTest {
         // 1) load the build project
         Environment environment = EnvironmentBuilder.getBuilder().setUserHome(USER_HOME).build();
         ProjectEnvironmentBuilder projectEnvironmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment);
-        BuildProject project = BuildProject.load(projectEnvironmentBuilder, projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectEnvironmentBuilder, projectDirPath);
 
         // 2) set local repository to dependency
         project.currentPackage().dependenciesToml().orElseThrow().modify().withContent(dependencyContent).apply();
@@ -313,7 +313,7 @@ public class PackageResolutionTests extends BaseTest {
         // 2) load the build project
         Environment environment = EnvironmentBuilder.getBuilder().setUserHome(USER_HOME).build();
         ProjectEnvironmentBuilder projectEnvironmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment);
-        BuildProject project = BuildProject.load(projectEnvironmentBuilder, projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectEnvironmentBuilder, projectDirPath);
 
         // 3) set local repository to dependency compile the package and check diagnostics
         project.currentPackage().dependenciesToml().get().modify().withContent(dependencyContent).apply();
@@ -335,7 +335,7 @@ public class PackageResolutionTests extends BaseTest {
         BCompileUtil.copyBalaToDistRepository(balaPath, "bash", "soap", "0.1.0");
 
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_x_with_invalid_bala_dep");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics
@@ -374,7 +374,7 @@ public class PackageResolutionTests extends BaseTest {
         BCompileUtil.copyBalaToDistRepository(helloBalaPath, "bache", "hello", "0.1.0");
 
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("package_xx_with_invalid_transitive_bala_dep");
-        BuildProject buildProject = BuildProject.load(projectDirPath);
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
         PackageCompilation compilation = buildProject.currentPackage().getCompilation();
 
         // Check whether there are any diagnostics

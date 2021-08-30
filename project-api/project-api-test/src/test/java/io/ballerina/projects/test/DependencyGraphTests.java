@@ -95,7 +95,7 @@ public class DependencyGraphTests extends BaseTest {
         Path projectPath = RESOURCE_DIRECTORY.resolve("projects_for_edit_api_tests/package_test_dependencies_toml");
 
         // Create build options with sticky
-        BuildProject project = BuildProject.load(projectPath, new BuildOptionsBuilder().sticky(true).build());
+        BuildProject project = TestUtils.loadBuildProject(projectPath, new BuildOptionsBuilder().sticky(true).build());
         DependencyGraph<ResolvedPackageDependency> dependencyGraphOld =
                 project.currentPackage().getResolution().dependencyGraph();
         // dependency graph should contain self and package_dep
@@ -137,7 +137,7 @@ public class DependencyGraphTests extends BaseTest {
     public void testRemoveDependency() {
         // 1) load the project
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("projects_for_resolution_tests/package_b");
-        BuildProject project = BuildProject.load(projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectDirPath);
         DependencyGraph<ResolvedPackageDependency> dependencyGraphOld =
                 project.currentPackage().getResolution().dependencyGraph();
         // dependency graph should contain self and package_c
@@ -174,7 +174,7 @@ public class DependencyGraphTests extends BaseTest {
     public void testAddDependency() {
         // 1) load the project
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("projects_for_resolution_tests/package_b");
-        BuildProject project = BuildProject.load(projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectDirPath);
         DependencyGraph<ResolvedPackageDependency> dependencyGraphOld =
                 project.currentPackage().getResolution().dependencyGraph();
         // dependency graph should contain self and package_c
@@ -219,7 +219,7 @@ public class DependencyGraphTests extends BaseTest {
     public void testRemoveAndAddDependencies() {
         // 1) load the project
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("projects_for_resolution_tests/package_b");
-        BuildProject project = BuildProject.load(projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectDirPath);
         DependencyGraph<ResolvedPackageDependency> dependencyGraphOld =
                 project.currentPackage().getResolution().dependencyGraph();
         // dependency graph should contain self and package_c
@@ -256,7 +256,7 @@ public class DependencyGraphTests extends BaseTest {
     public void testUnaffectedEdit() {
         // 1) load the project
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("projects_for_resolution_tests/package_b");
-        BuildProject project = BuildProject.load(projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectDirPath);
         DependencyGraph<ResolvedPackageDependency> dependencyGraphOld =
                 project.currentPackage().getResolution().dependencyGraph();
         // dependency graph should contain self and package_c
@@ -294,7 +294,7 @@ public class DependencyGraphTests extends BaseTest {
         // http -> io, cache -> io (1.4.2)
         Path projectDirPath = RESOURCE_DIRECTORY
                 .resolve("projects_for_resolution_tests/ultimate_package_resolution/package_http");
-        BuildProject project = BuildProject.load(projectEnvironmentBuilder, projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectEnvironmentBuilder, projectDirPath);
         PackageResolver packageResolver = project.projectEnvironmentContext().getService(PackageResolver.class);
 
         ResolutionRequest resolutionRequest = ResolutionRequest.from(
@@ -350,7 +350,7 @@ public class DependencyGraphTests extends BaseTest {
         // http -> io, cache -> io (1.4.2)
         Path projectDirPath = RESOURCE_DIRECTORY
                 .resolve("projects_for_resolution_tests/ultimate_package_resolution/package_http");
-        BuildProject project = BuildProject.load(projectEnvironmentBuilder, projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectEnvironmentBuilder, projectDirPath);
         PackageResolver packageResolver = project.projectEnvironmentContext().getService(PackageResolver.class);
 
         ResolutionRequest resolutionRequest = ResolutionRequest.from(
@@ -424,7 +424,7 @@ public class DependencyGraphTests extends BaseTest {
         // http -> io, cache -> io (1.4.2)
         Path projectDirPath = RESOURCE_DIRECTORY
                 .resolve("projects_for_resolution_tests/ultimate_package_resolution/package_http");
-        BuildProject project = BuildProject.load(projectEnvironmentBuilder, projectDirPath);
+        BuildProject project = TestUtils.loadBuildProject(projectEnvironmentBuilder, projectDirPath);
         PackageResolver packageResolver = project.projectEnvironmentContext().getService(PackageResolver.class);
 
         ResolutionRequest resolutionRequest = ResolutionRequest.from(
