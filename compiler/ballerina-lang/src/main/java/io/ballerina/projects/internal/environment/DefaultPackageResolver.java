@@ -34,7 +34,6 @@ import io.ballerina.projects.environment.ResolutionResponse.ResolutionStatus;
 import io.ballerina.projects.internal.ImportModuleRequest;
 import io.ballerina.projects.internal.ImportModuleResponse;
 import io.ballerina.projects.util.ProjectConstants;
-import io.ballerina.projects.util.ProjectUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -123,21 +122,23 @@ public class DefaultPackageResolver implements PackageResolver {
         List<PackageMetadataResponse> latestVersionsInDist = distributionRepo
                 .resolvePackageMetadata(resolutionRequests);
 
-
         // Send non built in packages to central
         List<ResolutionRequest> centralLoadRequests = resolutionRequests.stream()
-                .filter(r -> !ProjectUtils.isBuiltInPackage(r.orgName(), r.packageName().value()))
+                .filter(r -> !r.packageDescriptor().isBuiltInPackage())
                 .collect(Collectors.toList());
         List<PackageMetadataResponse> latestVersionsInCentral = centralRepo
                 .resolvePackageMetadata(centralLoadRequests);
 
-        // TODO Local package should get priority over the same version in central or dist repo
         // TODO Unit test following merge
         List<PackageMetadataResponse> responseDescriptors = new ArrayList<>(
-                Stream.of(latestVersionsInDist, latestVersionsInCentral, responseFrmLocalRepo)
+                // Since packages can be resolved from multiple repos
+                // the repos should be provided to the stream in the order of priority.
+                Stream.of(responseFrmLocalRepo, latestVersionsInDist, latestVersionsInCentral)
                         .flatMap(List::stream).collect(Collectors.toMap(
                         PackageMetadataResponse::packageLoadRequest, Function.identity(),
                         (PackageMetadataResponse x, PackageMetadataResponse y) -> {
+                            // There will be 2 iterations (number of repos-1) and the returned
+                            // value of the first iteration will be the 'x' for the next iteration.
                             if (y.resolutionStatus().equals(ResolutionStatus.UNRESOLVED)) {
                                 return x;
                             }
