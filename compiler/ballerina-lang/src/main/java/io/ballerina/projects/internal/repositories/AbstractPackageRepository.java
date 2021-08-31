@@ -88,6 +88,9 @@ public abstract class AbstractPackageRepository implements PackageRepository {
                                                                 PackageLockingMode packageLockingMode) {
         List<PackageVersion> packageVersions = getPackageVersions(
                 packageDescriptor.org(), packageDescriptor.name(), packageDescriptor.version());
+        if (packageDescriptor.isBuiltInPackage()) {
+            return packageVersions;
+        }
         CompatibleRange compatibilityRange = getCompatibilityRange(packageDescriptor.version(), packageLockingMode);
 
         if (compatibilityRange.equals(CompatibleRange.LATEST)) {
