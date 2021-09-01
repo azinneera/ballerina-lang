@@ -118,7 +118,9 @@ public class PackageDependencyGraphBuilder {
         if (dependencyNode == null) {
             return false;
         }
-
+        if (node.isBuiltInPackage()) {
+            return false;
+        }
         return dependencyNode.pkgDesc().version().equals(node.version());
     }
 
@@ -280,10 +282,6 @@ public class PackageDependencyGraphBuilder {
                                                        DependencyNode existingPkgDep) {
         PackageDescriptor newPkgDesc = newPkgDep.pkgDesc();
         PackageDescriptor existingPkgDesc = existingPkgDep.pkgDesc();
-
-        if (existingPkgDesc.isBuiltInPackage()) {
-            return newPkgDesc;
-        }
 
         VersionCompatibilityResult compatibilityResult = newPkgDesc.version().compareTo(existingPkgDesc.version());
         switch (compatibilityResult) {
