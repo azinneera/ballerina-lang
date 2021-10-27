@@ -20,6 +20,7 @@ package io.ballerina.projects.directory;
 import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.BuildOptionsBuilder;
 import io.ballerina.projects.DocumentId;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageConfig;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
@@ -67,6 +68,14 @@ public class SingleFileProject extends Project {
         return singleFileProject;
     }
 
+    private static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder, Package currentPackage,
+                                         BuildOptions buildOptions) {
+        SingleFileProject singleFileProject = new SingleFileProject(
+                environmentBuilder, currentPackage.project().sourceRoot(), buildOptions);
+        singleFileProject.setCurrentPackage(currentPackage);
+        return singleFileProject;
+    }
+
     private SingleFileProject(ProjectEnvironmentBuilder environmentBuilder, Path filePath, BuildOptions buildOptions) {
         super(ProjectKind.SINGLE_FILE_PROJECT, filePath, environmentBuilder, buildOptions);
         populateCompilerContext();
@@ -91,5 +100,11 @@ public class SingleFileProject extends Project {
 
     @Override
     public void save() {
+    }
+
+    @Override
+    public Project duplicate() {
+        Package clone = this.currentPackage().duplicate();
+        return SingleFileProject.load(ProjectEnvironmentBuilder.getDefaultBuilder(), clone, buildOptions());
     }
 }

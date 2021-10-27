@@ -118,6 +118,14 @@ public class BuildProject extends Project {
         return buildProject;
     }
 
+    private static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Package currentPackage,
+                                    BuildOptions buildOptions) {
+        BuildProject buildProject = new BuildProject(
+                environmentBuilder, currentPackage.project().sourceRoot(), buildOptions);
+        buildProject.setCurrentPackage(currentPackage);
+        return buildProject;
+    }
+
     private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions) {
         super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions);
         populateCompilerContext();
@@ -227,6 +235,11 @@ public class BuildProject extends Project {
                 writeBuildFile(buildFilePath);
             }
         }
+    }
+    @Override
+    public Project duplicate() {
+        Package clone = this.currentPackage().duplicate();
+        return BuildProject.load(ProjectEnvironmentBuilder.getDefaultBuilder(), clone, buildOptions());
     }
 
     private void writeDependencies() {

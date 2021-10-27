@@ -22,6 +22,7 @@ import io.ballerina.projects.Document;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.Module;
 import io.ballerina.projects.ModuleId;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageConfig;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
@@ -54,6 +55,12 @@ public class BalaProject extends Project {
         PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
         BalaProject balaProject = new BalaProject(environmentBuilder, balaPath);
         balaProject.addPackage(packageConfig);
+        return balaProject;
+    }
+
+    private static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Package currentPackage) {
+        BalaProject balaProject = new BalaProject(environmentBuilder, currentPackage.project().sourceRoot());
+        balaProject.setCurrentPackage(currentPackage);
         return balaProject;
     }
 
@@ -103,6 +110,12 @@ public class BalaProject extends Project {
 
     @Override
     public void save() {
+    }
+
+    @Override
+    public Project duplicate() {
+        Package clone = this.currentPackage().duplicate();
+        return BalaProject.loadProject(ProjectEnvironmentBuilder.getDefaultBuilder(), clone);
     }
 
     public String platform() {
