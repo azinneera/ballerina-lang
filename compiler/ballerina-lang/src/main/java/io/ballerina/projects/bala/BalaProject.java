@@ -18,15 +18,18 @@
 
 package io.ballerina.projects.bala;
 
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Document;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.Module;
 import io.ballerina.projects.ModuleId;
 import io.ballerina.projects.PackageConfig;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.internal.BalaFiles;
 import io.ballerina.projects.internal.PackageConfigCreator;
 import io.ballerina.projects.util.ProjectConstants;
@@ -57,9 +60,22 @@ public class BalaProject extends Project {
         return balaProject;
     }
 
+    private BalaProject loadProject(PackageConfig packageConfig) {
+        BalaProject buildProject = new BalaProject(ProjectEnvironmentBuilder.getDefaultBuilder(),
+                packageConfig.packagePath());
+        buildProject.addPackage(packageConfig);
+        return buildProject;
+    }
+
     private BalaProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath) {
         super(ProjectKind.BALA_PROJECT, balaPath, environmentBuilder);
         this.platform = BalaFiles.readPackageJson(balaPath).getPlatform();
+    }
+
+    @Override
+    public Project duplicate() {
+        PackageConfig packageConfig = PackageConfigCreator.createPackageConfig(currentPackage());
+        return loadProject(packageConfig);
     }
 
     @Override

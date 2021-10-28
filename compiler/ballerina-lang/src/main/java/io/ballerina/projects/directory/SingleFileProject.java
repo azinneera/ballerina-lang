@@ -67,9 +67,22 @@ public class SingleFileProject extends Project {
         return singleFileProject;
     }
 
+    private SingleFileProject load(PackageConfig packageConfig) {
+        SingleFileProject singleFileProject = new SingleFileProject(ProjectEnvironmentBuilder.getDefaultBuilder(),
+                packageConfig.packagePath(), buildOptions());
+        singleFileProject.addPackage(packageConfig);
+        return singleFileProject;
+    }
+
     private SingleFileProject(ProjectEnvironmentBuilder environmentBuilder, Path filePath, BuildOptions buildOptions) {
         super(ProjectKind.SINGLE_FILE_PROJECT, filePath, environmentBuilder, buildOptions);
         populateCompilerContext();
+    }
+
+    @Override
+    public Project duplicate() {
+        PackageConfig packageConfig = PackageConfigCreator.createPackageConfig(currentPackage());
+        return load(packageConfig);
     }
 
     @Override

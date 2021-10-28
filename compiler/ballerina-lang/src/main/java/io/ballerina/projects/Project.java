@@ -17,7 +17,11 @@
  */
 package io.ballerina.projects;
 
+import io.ballerina.projects.directory.BuildProject;
+import io.ballerina.projects.directory.ProjectLoader;
 import io.ballerina.projects.environment.ProjectEnvironment;
+import io.ballerina.projects.internal.PackageConfigCreator;
+import io.ballerina.projects.internal.ProjectFiles;
 import org.wso2.ballerinalang.compiler.PackageCache;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.CompilerOptions;
@@ -112,6 +116,8 @@ public abstract class Project {
         PackageCache packageCache = PackageCache.getInstance(compilerContext);
         packageCache.flush();
     }
+
+    public abstract Project duplicate();
 
     public abstract DocumentId documentId(Path file);
 

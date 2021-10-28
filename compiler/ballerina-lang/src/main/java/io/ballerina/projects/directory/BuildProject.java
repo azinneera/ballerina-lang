@@ -118,6 +118,13 @@ public class BuildProject extends Project {
         return buildProject;
     }
 
+    private BuildProject load(PackageConfig packageConfig) {
+        BuildProject buildProject = new BuildProject(ProjectEnvironmentBuilder.getDefaultBuilder(),
+                packageConfig.packagePath(), buildOptions());
+        buildProject.addPackage(packageConfig);
+        return buildProject;
+    }
+
     private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions) {
         super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions);
         populateCompilerContext();
@@ -153,6 +160,12 @@ public class BuildProject extends Project {
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public Project duplicate() {
+        PackageConfig packageConfig = PackageConfigCreator.createPackageConfig(currentPackage());
+        return load(packageConfig);
     }
 
     @Override

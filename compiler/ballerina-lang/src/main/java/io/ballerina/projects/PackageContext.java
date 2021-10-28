@@ -296,10 +296,17 @@ class PackageContext {
             ModuleContext moduleContext = this.moduleContext(moduleId);
             duplicatedModuleContextMap.put(moduleId, moduleContext.duplicate());
         }
+        // pkgDescDependencyGraph will be non-null for bala projects and null for other project types.
+        DependencyGraph<PackageDescriptor> pkgDescDependencyGraph;
+        if (this.pkgDescDependencyGraph == null) {
+            pkgDescDependencyGraph = DependencyGraph.emptyGraph();
+        } else {
+            pkgDescDependencyGraph = this.pkgDescDependencyGraph;
+        }
 
         return new PackageContext(this.project, this.packageId, this.packageManifest,
                 this.dependencyManifest, this.ballerinaTomlContext, this.dependenciesTomlContext,
                 this.cloudTomlContext, this.compilerPluginTomlContext, this.packageMdContext,
-                this.compilationOptions, duplicatedModuleContextMap, DependencyGraph.emptyGraph());
+                this.compilationOptions, duplicatedModuleContextMap, pkgDescDependencyGraph);
     }
 }
