@@ -100,6 +100,8 @@ public abstract class Project {
         options.put(PROJECT_DIR, this.sourceRoot().toAbsolutePath().toString());
     }
 
+    public abstract Project duplicate();
+
     public abstract DocumentId documentId(Path file);
 
     public abstract Optional<Path> documentPath(DocumentId documentId);

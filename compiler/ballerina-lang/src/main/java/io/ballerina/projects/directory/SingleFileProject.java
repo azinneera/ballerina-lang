@@ -73,6 +73,11 @@ public class SingleFileProject extends Project {
     }
 
     @Override
+    public Project duplicate() {
+        throw new UnsupportedOperationException("duplication is not supported for standalone files");
+    }
+
+    @Override
     public DocumentId documentId(Path file) {
         if (!this.sourceRoot.toAbsolutePath().normalize().toString().equals(
                 file.toAbsolutePath().normalize().toString())) {

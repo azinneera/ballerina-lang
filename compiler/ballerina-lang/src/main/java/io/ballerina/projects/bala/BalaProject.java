@@ -63,6 +63,11 @@ public class BalaProject extends Project {
     }
 
     @Override
+    public Project duplicate() {
+        throw new UnsupportedOperationException("duplication is not supported for BALA projects");
+    }
+
+    @Override
     public DocumentId documentId(Path file) {
         if (file == null) {
             throw new ProjectException("file path cannot be null");

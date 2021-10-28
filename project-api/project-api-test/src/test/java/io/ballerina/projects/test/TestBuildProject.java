@@ -60,6 +60,8 @@ import org.testng.Assert;
 import org.testng.SkipException;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
+import org.wso2.ballerinalang.compiler.PackageCache;
+import org.wso2.ballerinalang.compiler.util.CompilerContext;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -1531,6 +1533,84 @@ public class TestBuildProject extends BaseTest {
         // Clean Dependencies.toml and build file if already exists
         Files.deleteIfExists(projectDirPath.resolve(DEPENDENCIES_TOML));
         Files.deleteIfExists(projectDirPath.resolve(TARGET_DIR_NAME).resolve(BUILD_FILE));
+    }
+
+    @Test
+    public void testProjectDuplicate() {
+        Path projectPath = RESOURCE_DIRECTORY.resolve("myproject");
+        BuildProject project = loadBuildProject(projectPath);
+
+        Project duplicate = project.duplicate();
+        Assert.assertNotSame(project, duplicate);
+        Assert.assertNotSame(project.currentPackage().project(), duplicate.currentPackage().project());
+
+        Assert.assertNotSame(project.currentPackage(), duplicate.currentPackage());
+        Assert.assertEquals(project.currentPackage().packageId(), duplicate.currentPackage().packageId());
+        Assert.assertTrue(project.currentPackage().moduleIds().containsAll(duplicate.currentPackage().moduleIds())
+                && duplicate.currentPackage().moduleIds().containsAll(project.currentPackage().moduleIds()));
+        Assert.assertEquals(project.currentPackage().packageMd().isPresent(),
+                duplicate.currentPackage().packageMd().isPresent());
+        if (project.currentPackage().packageMd().isPresent()) {
+            Assert.assertEquals(project.currentPackage().packageMd().get().content(),
+                    duplicate.currentPackage().packageMd().get().content());
+        }
+
+        for (ModuleId moduleId : project.currentPackage().moduleIds()) {
+            Assert.assertNotSame(project.currentPackage().module(moduleId),
+                    duplicate.currentPackage().module(moduleId));
+            Assert.assertNotSame(project.currentPackage().module(moduleId).project(),
+                    duplicate.currentPackage().module(moduleId).project());
+            Assert.assertNotSame(project.currentPackage().module(moduleId).packageInstance(),
+                    duplicate.currentPackage().module(moduleId).packageInstance());
+
+            Assert.assertEquals(project.currentPackage().module(moduleId).descriptor(),
+                    duplicate.currentPackage().module(moduleId).descriptor());
+            Assert.assertEquals(project.currentPackage().module(moduleId).moduleMd().isPresent(),
+                    duplicate.currentPackage().module(moduleId).moduleMd().isPresent());
+            if (project.currentPackage().module(moduleId).moduleMd().isPresent()) {
+                Assert.assertEquals(project.currentPackage().module(moduleId).moduleMd().get().content(),
+                        duplicate.currentPackage().module(moduleId).moduleMd().get().content());
+            }
+
+            Assert.assertTrue(project.currentPackage().module(moduleId).documentIds().containsAll(
+                    duplicate.currentPackage().module(moduleId).documentIds())
+                    && duplicate.currentPackage().module(moduleId).documentIds().containsAll(
+                            project.currentPackage().module(moduleId).documentIds()));
+            for (DocumentId documentId : project.currentPackage().module(moduleId).documentIds()) {
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId),
+                        duplicate.currentPackage().module(moduleId).document(documentId));
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId).module(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).module());
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId).syntaxTree(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).syntaxTree());
+
+                Assert.assertEquals(project.currentPackage().module(moduleId).document(documentId).name(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).name());
+                Assert.assertEquals(
+                        project.currentPackage().module(moduleId).document(documentId).syntaxTree().toSourceCode(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).syntaxTree().toSourceCode());
+            }
+
+            for (DocumentId documentId : project.currentPackage().module(moduleId).testDocumentIds()) {
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId),
+                        duplicate.currentPackage().module(moduleId).document(documentId));
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId).module(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).module());
+                Assert.assertNotSame(project.currentPackage().module(moduleId).document(documentId).syntaxTree(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).syntaxTree());
+
+                Assert.assertEquals(project.currentPackage().module(moduleId).document(documentId).name(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).name());
+                Assert.assertEquals(
+                        project.currentPackage().module(moduleId).document(documentId).syntaxTree().toSourceCode(),
+                        duplicate.currentPackage().module(moduleId).document(documentId).syntaxTree().toSourceCode());
+            }
+        }
+        Assert.assertNotSame(project.projectEnvironmentContext().getService(CompilerContext.class),
+                duplicate.projectEnvironmentContext().getService(CompilerContext.class));
+        Assert.assertNotSame(
+                PackageCache.getInstance(project.projectEnvironmentContext().getService(CompilerContext.class)),
+                PackageCache.getInstance(duplicate.projectEnvironmentContext().getService(CompilerContext.class)));
     }
 
     private static BuildProject loadBuildProject(Path projectPath) {
