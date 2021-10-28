@@ -436,7 +436,6 @@ public class Package {
                     this.dependencyManifest, this.ballerinaTomlContext, this.dependenciesTomlContext,
                     this.cloudTomlContext, this.compilerPluginTomlContext, this.packageMdContext,
                     this.compilationOptions, this.moduleContextMap, DependencyGraph.emptyGraph());
-
             this.project.setCurrentPackage(new Package(newPackageContext, this.project));
 
             DependencyGraph<ResolvedPackageDependency> newDepGraph = this.project.currentPackage().getResolution()

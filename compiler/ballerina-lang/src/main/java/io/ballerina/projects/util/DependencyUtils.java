@@ -37,6 +37,7 @@ public class DependencyUtils {
      * @param project project
      */
     public static void pullMissingDependencies(Project project) {
+        project.refresh();
         CompilationOptionsBuilder compilationOptionsBuilder = new CompilationOptionsBuilder();
         compilationOptionsBuilder.offline(false).sticky(false);
         project.currentPackage().getResolution(compilationOptionsBuilder.build());

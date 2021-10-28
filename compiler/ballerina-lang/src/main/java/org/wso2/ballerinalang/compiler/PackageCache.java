@@ -84,14 +84,13 @@ public class PackageCache {
 
     public void flush() {
         packageMap.clear();
-        for (String s : packageSymbolMap.keySet()) {
-            PackageID pkgID = getSymbol(s).pkgID;
+        for (String idStr : packageSymbolMap.keySet()) {
+            PackageID pkgID = getSymbol(idStr).pkgID;
             if (PackageID.isLangLibPackageID(pkgID)) {
                 continue;
             }
             packageSymbolMap.remove(pkgID);
         }
-
     }
 
     public static String getCacheID(PackageID packageID) {
