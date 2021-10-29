@@ -51,11 +51,13 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.internal.model.BuildJson;
+import io.ballerina.projects.util.DependencyUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.toml.semantic.ast.TomlTableArrayNode;
 import io.ballerina.toml.semantic.ast.TomlTableNode;
 import io.ballerina.tools.text.LinePosition;
+import org.ballerinalang.test.BCompileUtil;
 import org.testng.Assert;
 import org.testng.SkipException;
 import org.testng.annotations.AfterClass;
@@ -1611,6 +1613,23 @@ public class TestBuildProject extends BaseTest {
         Assert.assertNotSame(
                 PackageCache.getInstance(project.projectEnvironmentContext().getService(CompilerContext.class)),
                 PackageCache.getInstance(duplicate.projectEnvironmentContext().getService(CompilerContext.class)));
+    }
+
+    @Test
+    public void testProjectRefresh() {
+        Path projectDirPath = RESOURCE_DIRECTORY.resolve("projects_for_refresh_tests").resolve("package_refresh_one");
+        BuildProject buildProject = TestUtils.loadBuildProject(projectDirPath);
+        PackageCompilation compilation = buildProject.currentPackage().getCompilation();
+        int errorCount = compilation.diagnosticResult().errorCount();
+        Assert.assertEquals(errorCount, 3);
+
+        BCompileUtil.compileAndCacheBala("projects_for_refresh_tests/package_refresh_two");
+        int errorCount2 = buildProject.currentPackage().getCompilation().diagnosticResult().errorCount();
+        Assert.assertEquals(errorCount2, 3);
+
+        buildProject.refresh();
+        int errorCount3 = buildProject.currentPackage().getCompilation().diagnosticResult().errorCount();
+        Assert.assertEquals(errorCount3, 0);
     }
 
     private static BuildProject loadBuildProject(Path projectPath) {
