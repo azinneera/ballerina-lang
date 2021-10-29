@@ -240,7 +240,8 @@ class PackageContext {
     }
 
     PackageResolution getResolution(CompilationOptions compilationOptions) {
-        return PackageResolution.from(this, compilationOptions);
+        packageResolution =  PackageResolution.from(this, compilationOptions);
+        return packageResolution;
     }
 
     Collection<PackageDependency> packageDependencies() {
