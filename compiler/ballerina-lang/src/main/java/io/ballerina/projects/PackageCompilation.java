@@ -94,6 +94,13 @@ public class PackageCompilation {
         return compile(compilation);
     }
 
+    static PackageCompilation from(PackageContext rootPackageContext) {
+        PackageCompilation compilation = new PackageCompilation(
+                rootPackageContext, rootPackageContext.compilationOptions());
+        compilation.compileModules();
+        return compilation;
+    }
+
     private static PackageCompilation compile(PackageCompilation compilation) {
         // Compile modules in the dependency graph
         compilation.compileModules();
