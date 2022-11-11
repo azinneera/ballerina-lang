@@ -15,12 +15,10 @@
 // under the License.
 
 import simpleclientnegativefive.client1;
-import simpleclientnegativefive.client1 as bar;
 
 client "https://postman-echo.com/get?name=simpleclienttest.yaml" as foo;
 
 function testModuleClientDecl() {
     foo:ClientConfiguration _ = {'limit: 5};
     client1:ClientConfiguration _ = {'limit: 5};
-    bar:ClientConfiguration _ = {'limit: 5};
 }
