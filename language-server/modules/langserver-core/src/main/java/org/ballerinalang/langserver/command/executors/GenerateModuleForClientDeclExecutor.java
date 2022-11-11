@@ -32,6 +32,7 @@ import org.ballerinalang.langserver.commons.command.spi.LSCommandExecutor;
 import org.ballerinalang.langserver.contexts.ContextBuilder;
 import org.ballerinalang.langserver.diagnostic.DiagnosticsHelper;
 import org.ballerinalang.langserver.exception.UserErrorException;
+import org.ballerinalang.util.diagnostic.DiagnosticErrorCode;
 import org.eclipse.lsp4j.MessageType;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.ProgressParams;
@@ -42,6 +43,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -54,6 +56,9 @@ import java.util.concurrent.CompletableFuture;
 public class GenerateModuleForClientDeclExecutor implements LSCommandExecutor {
 
     public static final String COMMAND = "GENERATE_MODULE_FOR_CLIENT_DECL";
+
+    public static final Set<String> DIAGNOSTIC_CODES = Set.of(
+            DiagnosticErrorCode.NO_MODULE_GENERATED_FOR_CLIENT_DECL.diagnosticId(), "BCE5303");
 
     @Override
     public Object execute(ExecuteCommandContext context) throws LSCommandExecutorException {
@@ -98,8 +103,13 @@ public class GenerateModuleForClientDeclExecutor implements LSCommandExecutor {
                 .thenRunAsync(() -> {
                     Optional<IDLClientGeneratorResult> idlClientGeneratorResult =
                             context.workspace().waitAndRunIDLGeneratorPlugins(filePath, project);
-                    if (idlClientGeneratorResult.isEmpty() 
-                            || idlClientGeneratorResult.get().reportedDiagnostics().diagnostics().size() > 0) {
+                    boolean diagnosticNotResolved = true;
+                    if (idlClientGeneratorResult.isPresent()) {
+                        diagnosticNotResolved = idlClientGeneratorResult.get().reportedDiagnostics().diagnostics()
+                                .stream().anyMatch(diagnostic ->
+                                        DIAGNOSTIC_CODES.contains(diagnostic.diagnosticInfo().code()));
+                    }
+                    if (diagnosticNotResolved) {
                         throw new UserErrorException("Failed to generate modules for client declarations");
                     }
                 })
