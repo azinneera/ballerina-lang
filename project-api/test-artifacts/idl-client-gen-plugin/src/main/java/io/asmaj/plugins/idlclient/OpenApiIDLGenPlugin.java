@@ -55,23 +55,16 @@ public class OpenApiIDLGenPlugin extends IDLGeneratorPlugin {
         @Override
         public boolean canHandle(IDLSourceGeneratorContext idlSourceGeneratorContext) {
             String uri = getUri(idlSourceGeneratorContext.clientNode());
-            if (uri.endsWith("throwNPE")) {
-                throw new NullPointerException();
-            }
-            if (uri.endsWith("throwRuntimeEx")) {
-                throw new RuntimeException("canHandle crashed");
-            }
             if (uri.endsWith("projectapiclientplugin.json")) {
                 return true;
             }
-            return uri.equals("https://postman-echo.com/get?name=projectapiclientplugin");
+            if (uri.equals("https://raw.githubusercontent.com/ballerina-platform/openapi-connectors/main/openapi/openweathermap/openapi.yaml")) {
+                return true;
+            }
+            return uri.equals("https://postman-echo.com/get?name=projectapiclientplugin.yaml");
         }
 
         public void perform(IDLSourceGeneratorContext idlSourceGeneratorContext) {
-            if (getUri(idlSourceGeneratorContext.clientNode()).endsWith("throwUnhandledEx")) {
-                throw new RuntimeException("perform crashed");
-            }
-
             ModuleId moduleId = ModuleId.create("client", idlSourceGeneratorContext.currentPackage().packageId());
             DocumentId documentId = DocumentId.create("idl_client.bal", moduleId);
             DocumentConfig documentConfig = getClientCode(documentId);
