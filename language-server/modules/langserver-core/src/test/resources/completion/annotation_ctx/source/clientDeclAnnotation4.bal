@@ -1,7 +1,9 @@
 import ballerina/module1;
 
-@module1:t
-client "https://postman-echo.com/get?name=projectapiclientplugin" as foo;
+function testFunction() {
+    @module1:t
+    client "https://postman-echo.com/get?name=projectapiclientplugin" as foo;
+}
 
 public type AnnotationType record {
     string foo;
