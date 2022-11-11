@@ -72,7 +72,8 @@ public class ExtractToConstantTest extends AbstractCodeActionTest {
                 {"extractExpressionToConstant1.json"},
                 {"extractExpressionToConstant2.json"},
                 {"extractExpressionToConstant3.json"},
-                {"extractServiceUriInModuleClientDeclToConstant.json"}
+                {"extractServiceUriInModuleClientDeclToConstant.json"},
+                {"extractServiceUriInClientDeclarationToConstant.json"}
         };
     }
 
