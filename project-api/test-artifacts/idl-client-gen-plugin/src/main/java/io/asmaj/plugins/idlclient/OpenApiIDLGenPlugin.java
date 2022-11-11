@@ -58,10 +58,7 @@ public class OpenApiIDLGenPlugin extends IDLGeneratorPlugin {
             if (uri.endsWith("projectapiclientplugin.json")) {
                 return true;
             }
-            if (uri.equals("https://raw.githubusercontent.com/ballerina-platform/openapi-connectors/main/openapi/openweathermap/openapi.yaml")) {
-                return true;
-            }
-            return uri.equals("https://postman-echo.com/get?name=projectapiclientplugin.yaml");
+            return uri.equals("https://postman-echo.com/get?name=projectapiclientplugin");
         }
 
         public void perform(IDLSourceGeneratorContext idlSourceGeneratorContext) {
