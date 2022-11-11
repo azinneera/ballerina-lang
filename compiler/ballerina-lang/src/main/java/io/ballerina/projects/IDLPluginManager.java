@@ -168,11 +168,7 @@ class IDLPluginManager {
 
         @Override
         public Path resourcePath() {
-            if (resourcePath.isAbsolute()) {
-                return resourcePath;
-            } else {
-                return currentPackage.project().sourceRoot().resolve(resourcePath);
-            }
+            return resourcePath;
         }
 
         @Override

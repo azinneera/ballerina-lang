@@ -495,15 +495,15 @@ class DocumentContext {
             }
 
             if (!Files.exists(absLocalFilePath)) {
-                String message = "could not locate the file: " + uri;
+                String message = "could not locate the resource file: " + localFilePath;
                 throw new ProjectException(message);
             }
             if (!Files.isRegularFile(absLocalFilePath)) {
-                String message = "provided file is not a regular file: " + uri;
+                String message = "provided file is not a regular file: " + localFilePath;
                 throw new ProjectException(message);
             }
             if (!absLocalFilePath.toFile().canRead()) {
-                String message = "provided file does not have read permission: " + uri;
+                String message = "provided file does not have read permission: " + localFilePath;
                 throw new ProjectException(message);
             }
             return localFilePath;
