@@ -40,7 +40,6 @@ public class BClientDeclarationSymbol extends BSymbol implements Annotatable {
     private List<BAnnotationAttachmentSymbol> annotationAttachments = new ArrayList<>();
 
     public String uri;
-    public boolean used = false;
 
     public BClientDeclarationSymbol(Name prefix, String uri, PackageID pkgID, BSymbol owner, Location pos,
                                     SymbolOrigin origin) {
