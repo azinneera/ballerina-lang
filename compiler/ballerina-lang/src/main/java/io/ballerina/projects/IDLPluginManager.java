@@ -20,6 +20,7 @@ package io.ballerina.projects;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import io.ballerina.compiler.internal.parser.tree.STAnnotationNode;
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
 import io.ballerina.compiler.syntax.tree.ClientDeclarationNode;
@@ -43,10 +44,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 class IDLPluginManager {
@@ -55,14 +54,12 @@ class IDLPluginManager {
     private final Path target;
     private final List<IDLClientEntry> cachedClientEntries;
     private final Set<String> cachedModuleNames;
-    private final Map<String, Integer> aliasNameCounter;
 
     private IDLPluginManager(Path target, List<IDLClientEntry> cachedPlugins) {
         this.target = target;
         this.moduleConfigs = new ArrayList<>();
         this.cachedClientEntries = cachedPlugins;
         this.cachedModuleNames = new HashSet<>();
-        this.aliasNameCounter = new HashMap<>();
     }
 
     static IDLPluginManager from(Path sourceRoot) {
@@ -120,10 +117,6 @@ class IDLPluginManager {
         this.cachedModuleNames.add(generatedModuleName);
     }
 
-    public Map<String, Integer> aliasNameCounter() {
-        return aliasNameCounter;
-    }
-
     public static class IDLSourceGeneratorContextImpl implements IDLSourceGeneratorContext {
         private final PackageID sourcePkgId;
         private final String sourceDoc;
@@ -135,15 +128,13 @@ class IDLPluginManager {
         private final List<Diagnostic> diagnostics = new ArrayList<>();
         private final Path resourcePath;
         private final List<IDLClientEntry> cachedClientEntries;
-        private Map<String, Integer> aliasNameCounter;
 
         public IDLSourceGeneratorContextImpl(Node clientNode, PackageID sourcePkgId, String sourceDoc,
                                              Package currentPackage, Path resourcePath,
                                              IDLClients idlClients,
                                              Set<ModuleLoadRequest> moduleLoadRequests,
                                              List<ModuleConfig> moduleConfigs,
-                                             List<IDLClientEntry> cachedPlugins,
-                                             Map<String, Integer> aliasNameCounter) {
+                                             List<IDLClientEntry> cachedPlugins) {
             this.sourcePkgId = sourcePkgId;
             this.sourceDoc = sourceDoc;
             this.currentPackage = currentPackage;
@@ -153,7 +144,6 @@ class IDLPluginManager {
             this.moduleLoadRequests = moduleLoadRequests;
             this.moduleConfigs = moduleConfigs;
             this.cachedClientEntries = cachedPlugins;
-            this.aliasNameCounter = aliasNameCounter;
         }
 
         @Override
@@ -224,19 +214,12 @@ class IDLPluginManager {
 
         private ModuleConfig createModuleConfigWithRandomName(ModuleConfig moduleConfig) {
             ModuleName randomModuleName;
-            String alias = moduleConfig.moduleDescriptor().name().moduleNamePart();
-            String moduleNameStr = alias;
-            if (aliasNameCounter.containsKey(alias)) {
-                moduleNameStr += aliasNameCounter.get(alias);
-                aliasNameCounter.put(alias, aliasNameCounter.get(alias) + 1);
-            } else {
-                aliasNameCounter.put(alias, 1);
-            }
             if (moduleConfig.moduleDescriptor().name() == null) {
-                // Module name is mandatory since this will be added as a non-default module
-                throw new ProjectException("module name cannot be null");
+                randomModuleName = ModuleName.from(moduleConfig.moduleDescriptor().packageName(),
+                        String.valueOf(System.currentTimeMillis()));
             } else {
-                randomModuleName = ModuleName.from(moduleConfig.moduleDescriptor().packageName(), moduleNameStr);
+                randomModuleName = ModuleName.from(moduleConfig.moduleDescriptor().packageName(),
+                        moduleConfig.moduleDescriptor().name().moduleNamePart() + System.currentTimeMillis());
             }
             ModuleDescriptor newModuleDescriptor = ModuleDescriptor.from(randomModuleName,
                     this.currentPackage.descriptor());

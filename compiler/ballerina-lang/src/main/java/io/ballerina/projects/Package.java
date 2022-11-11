@@ -273,7 +273,7 @@ public class Package {
         List<String> unusedModules = new ArrayList<>();
         if (Files.exists(modulesRoot)) {
             unusedModules.addAll(Files.list(modulesRoot).map(path ->
-                    Optional.of(path.getFileName()).get().toString()).collect(Collectors.toList()));
+                    path.getFileName().toString()).collect(Collectors.toList()));
         }
         for (ModuleId moduleId : resolution.packageContext().moduleIds()) {
             if (resolution.packageContext().moduleContext(moduleId).isGenerated()) {
