@@ -135,7 +135,7 @@ class IDLPluginManager {
         private final List<Diagnostic> diagnostics = new ArrayList<>();
         private final Path resourcePath;
         private final List<IDLClientEntry> cachedClientEntries;
-        private final Map<String, Integer> aliasNameCounter;
+        private Map<String, Integer> aliasNameCounter;
 
         public IDLSourceGeneratorContextImpl(Node clientNode, PackageID sourcePkgId, String sourceDoc,
                                              Package currentPackage, Path resourcePath,
@@ -204,9 +204,8 @@ class IDLPluginManager {
             List<String> annotations = CompilerPlugins.annotationsAsStr(supportedAnnotations);
             String uri = getUri(this.clientNode);
 
-            IDLClientEntry idlCacheInfo = new IDLClientEntry(uri, resourcePath, annotations,
-                    newModuleConfig.moduleDescriptor().name().moduleNamePart(),
-                    this.currentPackage.project().sourceRoot().resolve(resourcePath).toFile().lastModified());
+            IDLClientEntry idlCacheInfo = new IDLClientEntry(uri, resourcePath,
+                    annotations, newModuleConfig.moduleDescriptor().name().moduleNamePart());
             this.cachedClientEntries.add(idlCacheInfo);
         }
 
