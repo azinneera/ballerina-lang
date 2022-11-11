@@ -793,9 +793,7 @@ public enum DiagnosticErrorCode implements DiagnosticCode {
     MODULE_GENERATED_FOR_CLIENT_DECL_MUST_HAVE_A_CLIENT_OBJECT_TYPE(
             "BCE4043", "module.generated.for.client.decl.must.have.a.client.object.type"),
     MODULE_GENERATED_FOR_CLIENT_DECL_CANNOT_HAVE_MUTABLE_STATE(
-            "BCE4044", "module.generated.for.client.decl.cannot.have.mutable.state"),
-    CANNOT_IMPORT_MODULE_GENERATED_FOR_CLIENT_DECL(
-            "BCE4045", "cannot.import.module.generated.for.a.client.decl")
+            "BCE4044", "module.generated.for.client.decl.cannot.have.mutable.state")
     ;
 
     private String diagnosticId;
