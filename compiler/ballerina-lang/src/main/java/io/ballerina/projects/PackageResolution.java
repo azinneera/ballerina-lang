@@ -270,8 +270,6 @@ public class PackageResolution {
             this.pluginDiagnosticList.addAll(moduleContext.idlPluginDiagnostics());
         }
 
-        idlPluginManager.removeUnusedClients();
-
         for (String moduleName : idlPluginManager.cachedModuleNames()) {
             if (rootPackageContext.moduleContext(
                     ModuleName.from(rootPackageContext.packageName(), moduleName)) == null) {
