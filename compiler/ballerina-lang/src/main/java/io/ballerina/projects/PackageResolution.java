@@ -171,8 +171,7 @@ public class PackageResolution {
                           ModuleDescriptor moduleDescriptor) {
         var diagnosticInfo = new DiagnosticInfo(diagnosticErrorCode, message, severity);
         var diagnostic = DiagnosticFactory.createDiagnostic(diagnosticInfo, location);
-        var packageDiagnostic = new PackageDiagnostic(diagnostic, moduleDescriptor, rootPackageContext.project(),
-                false);
+        var packageDiagnostic = new PackageDiagnostic(diagnostic, moduleDescriptor, rootPackageContext.project());
         this.diagnosticList.add(packageDiagnostic);
         this.diagnosticResult = new DefaultDiagnosticResult(this.diagnosticList);
     }
