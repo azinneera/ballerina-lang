@@ -35,8 +35,8 @@ public class BLangClientDeclarationStatement extends BLangStatement implements C
     public BLangClientDeclaration clientDeclaration;
 
     @Override
-    public void setClientDeclaration(ClientDeclarationNode clientDeclaration) {
-        this.clientDeclaration = (BLangClientDeclaration) clientDeclaration;
+    public void setClientDeclaration(ClientDeclarationNode xmlnsDecl) {
+        this.clientDeclaration = (BLangClientDeclaration) xmlnsDecl;
     }
 
     @Override
