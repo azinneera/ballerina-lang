@@ -111,10 +111,6 @@ public abstract class AbstractCodeActionTest extends AbstractLSTest {
 
             boolean codeActionFound = false;
             JsonObject responseJson = getResponseJson(res);
-            if ("Tests if the import statement generation generated idl client module is avoided"
-                    .equals(testConfig.description)) {
-                Assert.fail(res);
-            }
             for (JsonElement jsonElement : responseJson.getAsJsonArray("result")) {
                 JsonObject right = jsonElement.getAsJsonObject().get("right").getAsJsonObject();
                 if (right == null) {
@@ -192,9 +188,9 @@ public abstract class AbstractCodeActionTest extends AbstractLSTest {
 
                         JsonArray actualArgs = actualCommand.getAsJsonArray("arguments");
                         JsonArray expArgs = expectedCommand.getAsJsonArray("arguments");
-                        if (expArgs == null
+                        if (expArgs == null 
                                 || !validateAndModifyArguments(
-                                actualCommand, actualArgs, expArgs, sourceRoot, sourcePath)) {
+                                        actualCommand, actualArgs, expArgs, sourceRoot, sourcePath)) {
                             misMatched = true;
                         }
                         actual.command = actualCommand;
