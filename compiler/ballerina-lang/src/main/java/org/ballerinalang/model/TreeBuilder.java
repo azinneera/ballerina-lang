@@ -146,6 +146,7 @@ import org.ballerinalang.model.tree.matchpatterns.WildCardMatchPatternNode;
 import org.ballerinalang.model.tree.statements.AssignmentNode;
 import org.ballerinalang.model.tree.statements.BlockStatementNode;
 import org.ballerinalang.model.tree.statements.BreakNode;
+import org.ballerinalang.model.tree.statements.ClientDeclarationStatementNode;
 import org.ballerinalang.model.tree.statements.CompoundAssignmentNode;
 import org.ballerinalang.model.tree.statements.ConstantNode;
 import org.ballerinalang.model.tree.statements.ContinueNode;
@@ -330,6 +331,7 @@ import org.wso2.ballerinalang.compiler.tree.matchpatterns.BLangWildCardMatchPatt
 import org.wso2.ballerinalang.compiler.tree.statements.BLangAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangBlockStmt;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangBreak;
+import org.wso2.ballerinalang.compiler.tree.statements.BLangClientDeclarationStatement;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangCompoundAssignment;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangContinue;
 import org.wso2.ballerinalang.compiler.tree.statements.BLangDo;
@@ -410,6 +412,10 @@ public class TreeBuilder {
 
     public static ClientDeclarationNode createClientDeclarationNode() {
         return new BLangClientDeclaration();
+    }
+
+    public static ClientDeclarationStatementNode createClientDeclarationStatementNode() {
+        return new BLangClientDeclarationStatement();
     }
 
     public static SimpleVariableNode createSimpleVariableNode() {
