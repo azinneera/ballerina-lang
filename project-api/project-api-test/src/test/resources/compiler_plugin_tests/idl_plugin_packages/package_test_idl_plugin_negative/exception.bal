@@ -18,5 +18,7 @@ client "https://postman-echo.com/get?name=projectapiclientplugin_throwNPE" as ba
 
 client "https://postman-echo.com/get?name=projectapiclientplugin_throwUnhandledExInPerform" as bar2;
 
-client "https://postman-echo.com/get?name=projectapiclientplugin_throwRuntimeEx" as bar3;
+public function testSameClientUri() {
+    client "https://postman-echo.com/get?name=projectapiclientplugin_throwRuntimeEx" as bar3;
+}
 
