@@ -572,10 +572,18 @@ public class CentralAPIClient {
                     .addHeader(ACCEPT, APPLICATION_JSON)
                     .build();
 
+            logRequestInitVerbose(resolutionReq);
             Call resolutionReqCall = client.newCall(resolutionReq);
             Response packageResolutionResponse = resolutionReqCall.execute();
+            logRequestConnectVerbose(resolutionReq, url);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
+            String packageResolutionResBodyContent = null;
+            if (body.isPresent()) {
+                packageResolutionResBodyContent = body.get().string();
+            }
+            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
@@ -643,10 +651,18 @@ public class CentralAPIClient {
                     .addHeader(ACCEPT, APPLICATION_JSON)
                     .build();
 
+            logRequestInitVerbose(packageResolutionReq);
             Call packageResolutionReqCall = client.newCall(packageResolutionReq);
             Response packageResolutionResponse = packageResolutionReqCall.execute();
+            logRequestConnectVerbose(packageResolutionReq, url);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
+            String packageResolutionResBodyContent = null;
+            if (body.isPresent()) {
+                packageResolutionResBodyContent = body.get().string();
+            }
+            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
@@ -700,15 +716,24 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
+            String url = this.baseUrl + "/" + PACKAGES + "/?q=" + query;
             Request searchReq = getNewRequest(supportedPlatform, ballerinaVersion)
                     .get()
-                    .url(this.baseUrl + "/" + PACKAGES + "/?q=" + query)
+                    .url(url)
                     .build();
 
+            logRequestInitVerbose(searchReq);
             Call httpRequestCall = client.newCall(searchReq);
             Response searchResponse = httpRequestCall.execute();
+            logRequestConnectVerbose(searchReq, url);
 
             body = Optional.ofNullable(searchResponse.body());
+            String searchResBodyContent = null;
+            if (body.isPresent()) {
+                searchResBodyContent = body.get().string();
+            }
+            logResponseVerbose(searchResponse, searchResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
@@ -911,6 +936,8 @@ public class CentralAPIClient {
      */
     protected OkHttpClient getClient() {
         return new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
                 .followRedirects(false)
                 .retryOnConnectionFailure(true)
                 .proxy(this.proxy)
