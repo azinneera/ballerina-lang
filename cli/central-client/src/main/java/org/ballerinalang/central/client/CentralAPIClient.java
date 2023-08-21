@@ -108,16 +108,21 @@ public class CentralAPIClient {
     private static final String ERR_CANNOT_GET_TRIGGER = "error: failed to find the trigger: ";
     private static final String ERR_PACKAGE_RESOLUTION = "error: while connecting to central: ";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    // System property name for enabling central verbose
+    public static final String SYS_PROP_CENTRAL_VERBOSE_ENABLED = "CENTRAL_VERBOSE_ENABLED";
+
     private final String baseUrl;
     private final Proxy proxy;
     private String accessToken;
     protected PrintStream outStream;
+    private final boolean verboseEnabled;
 
     public CentralAPIClient(String baseUrl, Proxy proxy, String accessToken) {
         this.outStream = System.out;
         this.baseUrl = baseUrl;
         this.proxy = proxy;
         this.accessToken = accessToken;
+        this.verboseEnabled = Boolean.parseBoolean(System.getenv(SYS_PROP_CENTRAL_VERBOSE_ENABLED));
     }
 
     /**
@@ -136,15 +141,23 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
-            String url = this.baseUrl + "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath;
+            String resourceUrl = "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath;
+            String url = this.baseUrl + resourceUrl;
             // append version to url if available
             if (null != version && !version.isEmpty()) {
                 url = url + "/" + version;
             }
 
             Request getPackageReq = getNewRequest(supportedPlatform, ballerinaVersion).get().url(url).build();
+            logRequestInitVerbose(getPackageReq);
             Call getPackageReqCall = client.newCall(getPackageReq);
             Response getPackageResponse = getPackageReqCall.execute();
+            logRequestConnectVerbose(getPackageReq, "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath);
+            String responseBodyContent = null;
+            if (body.isPresent()) {
+                responseBodyContent = body.get().string();
+            }
+            logResponseVerbose(getPackageResponse, responseBodyContent);
 
             body = Optional.ofNullable(getPackageResponse.body());
             if (body.isPresent()) {
@@ -152,12 +165,12 @@ public class CentralAPIClient {
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
                     // Package is found
                     if (getPackageResponse.code() == HTTP_OK) {
-                        return new Gson().fromJson(body.get().string(), Package.class);
+                        return new Gson().fromJson(responseBodyContent, Package.class);
                     }
 
                     // Package is not found
                     if (getPackageResponse.code() == HTTP_NOT_FOUND) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         if (error.getMessage().contains("package not found for:")) {
                             throw new NoPackageException(error.getMessage());
                         } else {
@@ -168,14 +181,14 @@ public class CentralAPIClient {
 
                     // Unauthorized access token
                     if (getPackageResponse.code() == HTTP_UNAUTHORIZED) {
-                        handleUnauthorizedResponse(orgNamePath, body);
+                        handleUnauthorizedResponse(orgNamePath, body, responseBodyContent);
                     }
 
                     // If request sent is wrong or error occurred at remote repository
                     if (getPackageResponse.code() == HTTP_BAD_REQUEST ||
                         getPackageResponse.code() == HTTP_INTERNAL_ERROR ||
                         getPackageResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new CentralClientException(error.getMessage());
                         }
@@ -215,31 +228,40 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
-            String url = this.baseUrl + "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath;
+            String resourceUrl = "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath;
+            String url = this.baseUrl + resourceUrl;
             Request getVersionsReq = getNewRequest(supportedPlatform, ballerinaVersion)
                     .get()
                     .url(url)
                     .build();
+            logRequestInitVerbose(getVersionsReq);
             Call getVersionsReqCall = client.newCall(getVersionsReq);
             Response getVersionsResponse = getVersionsReqCall.execute();
+            logRequestConnectVerbose(getVersionsReq, resourceUrl);
 
             body = Optional.ofNullable(getVersionsResponse.body());
+            String responseBodyContent = null;
+            if (body.isPresent()) {
+                responseBodyContent = body.get().string();
+            }
+            logResponseVerbose(getVersionsResponse, responseBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
                     // Package versions found
                     if (getVersionsResponse.code() == HTTP_OK) {
-                        return getAsList(body.get().string());
+                        return getAsList(responseBodyContent);
                     }
 
                     // Unauthorized access token
                     if (getVersionsResponse.code() == HTTP_UNAUTHORIZED) {
-                        handleUnauthorizedResponse(orgNamePath, body);
+                        handleUnauthorizedResponse(orgNamePath, body, responseBodyContent);
                     }
 
                     // Package is not found
                     if (getVersionsResponse.code() == HTTP_NOT_FOUND) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         if (error.getMessage().contains("package not found")) {
                             // if package not found return empty list
                             return new ArrayList<>();
@@ -253,7 +275,7 @@ public class CentralAPIClient {
                     if (getVersionsResponse.code() == HTTP_BAD_REQUEST ||
                         getVersionsResponse.code() == HTTP_INTERNAL_ERROR ||
                         getVersionsResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         throw new CentralClientException(ERR_CANNOT_FIND_VERSIONS + packageSignature +
                                                          ". reason: " + error.getMessage());
                     }
@@ -317,8 +339,17 @@ public class CentralAPIClient {
                     .url(url)
                     .build();
 
+            logRequestInitVerbose(pushRequest);
             Call pushRequestCall = client.newCall(pushRequest);
             Response packagePushResponse = pushRequestCall.execute();
+            logRequestConnectVerbose(pushRequest, "/" + PACKAGES);
+
+            body = Optional.ofNullable(packagePushResponse.body());
+            String responseBodyContent = null;
+            if (body.isPresent()) {
+                responseBodyContent = body.get().string();
+            }
+            logResponseVerbose(packagePushResponse, responseBodyContent);
 
             // Successfully pushed
             if (packagePushResponse.code() == HTTP_NO_CONTENT) {
@@ -328,10 +359,9 @@ public class CentralAPIClient {
                 return;
             }
 
-            body = Optional.ofNullable(packagePushResponse.body());
             // Invalid access token to push
             if (packagePushResponse.code() == HTTP_UNAUTHORIZED) {
-                handleUnauthorizedResponse(org, body);
+                handleUnauthorizedResponse(org, body, responseBodyContent);
             }
 
             if (body.isPresent()) {
@@ -339,7 +369,7 @@ public class CentralAPIClient {
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
                     // When request sent is invalid
                     if (packagePushResponse.code() == HTTP_BAD_REQUEST) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             // Currently this error is returned from central when token is unauthorized. This will later
                             // be removed with https://github.com/wso2-enterprise/ballerina-registry/issues/745
@@ -354,7 +384,7 @@ public class CentralAPIClient {
                     // When error occurred at remote repository
                     if (packagePushResponse.code() == HTTP_INTERNAL_ERROR ||
                         packagePushResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(responseBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new CentralClientException(ERR_CANNOT_PUSH + "'" + packageSignature +
                                                              "' reason:" + error.getMessage());
@@ -421,8 +451,17 @@ public class CentralAPIClient {
                     .addHeader(ACCEPT, APPLICATION_OCTET_STREAM)
                     .build();
 
+            logRequestInitVerbose(packagePullReq);
             Call packagePullReqCall = client.newCall(packagePullReq);
             Response packagePullResponse = packagePullReqCall.execute();
+            logRequestConnectVerbose(packagePullReq, url);
+
+            body = Optional.ofNullable(packagePullResponse.body());
+            String pkgPullResBodyContent = null;
+            if (body.isPresent()) {
+                pkgPullResBodyContent = body.get().string();
+            }
+            logResponseVerbose(packagePullResponse, pkgPullResBodyContent);
 
             // 302   - Package is found
             if (packagePullResponse.code() == HTTP_MOVED_TEMP) {
@@ -438,8 +477,11 @@ public class CentralAPIClient {
                             .addHeader(CONTENT_DISPOSITION, balaFileName.get())
                             .build();
 
+                    logRequestInitVerbose(downloadBalaRequest);
                     Call downloadBalaRequestCall = client.newCall(downloadBalaRequest);
                     Response balaDownloadResponse = downloadBalaRequestCall.execute();
+                    logRequestConnectVerbose(downloadBalaRequest, balaUrl.get());
+                    logResponseVerbose(balaDownloadResponse, null);
 
                     if (balaDownloadResponse.code() == HTTP_OK) {
                         boolean isNightlyBuild = ballerinaVersion.contains("SNAPSHOT");
@@ -460,7 +502,7 @@ public class CentralAPIClient {
 
             // Unauthorized access token
             if (packagePullResponse.code() == HTTP_UNAUTHORIZED) {
-                handleUnauthorizedResponse(org, body);
+                handleUnauthorizedResponse(org, body, pkgPullResBodyContent);
             }
 
             body = Optional.ofNullable(packagePullResponse.body());
@@ -470,7 +512,7 @@ public class CentralAPIClient {
                     // If request sent is invalid or when package is not found
                     if (packagePullResponse.code() == HTTP_BAD_REQUEST ||
                         packagePullResponse.code() == HTTP_NOT_FOUND) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(pkgPullResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new CentralClientException("error: " + error.getMessage());
                         }
@@ -479,7 +521,7 @@ public class CentralAPIClient {
                     //  When error occurred at remote repository
                     if (packagePullResponse.code() == HTTP_INTERNAL_ERROR ||
                         packagePullResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(pkgPullResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             String errorMsg =
                                     logFormatter.formatLog(ERR_CANNOT_PULL_PACKAGE + "'" + packageSignature +
@@ -530,10 +572,18 @@ public class CentralAPIClient {
                     .addHeader(ACCEPT, APPLICATION_JSON)
                     .build();
 
+            logRequestInitVerbose(resolutionReq);
             Call resolutionReqCall = client.newCall(resolutionReq);
             Response packageResolutionResponse = resolutionReqCall.execute();
+            logRequestConnectVerbose(resolutionReq, url);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
+            String packageResolutionResBodyContent = null;
+            if (body.isPresent()) {
+                packageResolutionResBodyContent = body.get().string();
+            }
+            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
@@ -601,10 +651,18 @@ public class CentralAPIClient {
                     .addHeader(ACCEPT, APPLICATION_JSON)
                     .build();
 
+            logRequestInitVerbose(packageResolutionReq);
             Call packageResolutionReqCall = client.newCall(packageResolutionReq);
             Response packageResolutionResponse = packageResolutionReqCall.execute();
+            logRequestConnectVerbose(packageResolutionReq, url);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
+            String packageResolutionResBodyContent = null;
+            if (body.isPresent()) {
+                packageResolutionResBodyContent = body.get().string();
+            }
+            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
@@ -658,15 +716,24 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
+            String url = this.baseUrl + "/" + PACKAGES + "/?q=" + query;
             Request searchReq = getNewRequest(supportedPlatform, ballerinaVersion)
                     .get()
-                    .url(this.baseUrl + "/" + PACKAGES + "/?q=" + query)
+                    .url(url)
                     .build();
 
+            logRequestInitVerbose(searchReq);
             Call httpRequestCall = client.newCall(searchReq);
             Response searchResponse = httpRequestCall.execute();
+            logRequestConnectVerbose(searchReq, url);
 
             body = Optional.ofNullable(searchResponse.body());
+            String searchResBodyContent = null;
+            if (body.isPresent()) {
+                searchResBodyContent = body.get().string();
+            }
+            logResponseVerbose(searchResponse, searchResBodyContent);
+
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
@@ -869,6 +936,8 @@ public class CentralAPIClient {
      */
     protected OkHttpClient getClient() {
         return new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
                 .followRedirects(false)
                 .retryOnConnectionFailure(true)
                 .proxy(this.proxy)
@@ -910,6 +979,47 @@ public class CentralAPIClient {
         }
 
         throw new CentralClientException(msg);
+    }
+
+    private void logResponseVerbose(Response response, String bodyContent) {
+        if (this.verboseEnabled) {
+            Optional<ResponseBody> body = Optional.ofNullable(response.body());
+            this.outStream.println("< HTTP " + response.code() + " " + response.message());
+
+            if (body.isPresent()) {
+                for (String headerName : response.headers().names()) {
+                    this.outStream.println("> " + headerName + ": " + response.header(headerName));
+                }
+                this.outStream.println("< ");
+                if (bodyContent != null && !bodyContent.isEmpty()) {
+                    this.outStream.println(bodyContent);
+                }
+                this.outStream.println("* Connection to host " + this.baseUrl + " left intact \n");
+            }
+        }
+    }
+
+    private void logRequestInitVerbose(Request request) {
+        if (this.verboseEnabled) {
+            this.outStream.println("*** Trying " + request.url());
+
+        }
+    }
+
+    private void logRequestConnectVerbose(Request request, String resourceUrl) {
+        if (this.verboseEnabled) {
+            this.outStream.println("* Connected to " + this.baseUrl);
+            this.outStream.println("> " + request.method() + " " + resourceUrl + " HTTP");
+            this.outStream.println("> Host: " + this.baseUrl);
+            for (String headerName : request.headers().names()) {
+                if (headerName.equals(AUTHORIZATION)) {
+                    this.outStream.println("> " + headerName + ": Bearer ************************************");
+                } else {
+                    this.outStream.println("> " + headerName + ": " + request.header(headerName));
+                }
+            }
+            this.outStream.println(">");
+        }
     }
 
     /**
@@ -1063,12 +1173,12 @@ public class CentralAPIClient {
      * @throws IOException            when accessing response body
      * @throws CentralClientException with unauthorized error message
      */
-    private void handleUnauthorizedResponse(String org, Optional<ResponseBody> body)
+    private void handleUnauthorizedResponse(String org, Optional<ResponseBody> body, String responseBody)
             throws IOException, CentralClientException {
         if (body.isPresent()) {
             Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
             if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
-                Error error = new Gson().fromJson(body.get().string(), Error.class);
+                Error error = new Gson().fromJson(responseBody, Error.class);
                 throw new CentralClientException("unauthorized access token for organization: '" + org +
                         "'. check access token set in 'Settings.toml' file. reason: " + error.getMessage());
             } else {
