@@ -152,14 +152,15 @@ public class CentralAPIClient {
             logRequestInitVerbose(getPackageReq);
             Call getPackageReqCall = client.newCall(getPackageReq);
             Response getPackageResponse = getPackageReqCall.execute();
-            logRequestConnectVerbose(getPackageReq, "/" + PACKAGES + "/" + orgNamePath + "/" + packageNamePath);
+            logRequestConnectVerbose(getPackageReq, url);
+
+            body = Optional.ofNullable(getPackageResponse.body());
             String responseBodyContent = null;
             if (body.isPresent()) {
                 responseBodyContent = body.get().string();
             }
             logResponseVerbose(getPackageResponse, responseBodyContent);
 
-            body = Optional.ofNullable(getPackageResponse.body());
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
@@ -564,7 +565,8 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
-            RequestBody requestBody = RequestBody.create(JSON, new Gson().toJson(request));
+            String payload = new Gson().toJson(request);
+            RequestBody requestBody = RequestBody.create(JSON, payload);
             Request resolutionReq = getNewRequest(supportedPlatform, ballerinaVersion)
                     .post(requestBody)
                     .url(url)
@@ -575,31 +577,31 @@ public class CentralAPIClient {
             logRequestInitVerbose(resolutionReq);
             Call resolutionReqCall = client.newCall(resolutionReq);
             Response packageResolutionResponse = resolutionReqCall.execute();
-            logRequestConnectVerbose(resolutionReq, url);
+            logRequestConnectVerbose(resolutionReq, url, payload);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
-            String packageResolutionResBodyContent = null;
+            String pkgResolutionResBodyContent = null;
             if (body.isPresent()) {
-                packageResolutionResBodyContent = body.get().string();
+                pkgResolutionResBodyContent = body.get().string();
             }
-            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+            logResponseVerbose(packageResolutionResponse, pkgResolutionResBodyContent);
 
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
                     // If searching was successful
                     if (packageResolutionResponse.code() == HTTP_OK) {
-                        return new Gson().fromJson(body.get().string(), PackageNameResolutionResponse.class);
+                        return new Gson().fromJson(pkgResolutionResBodyContent, PackageNameResolutionResponse.class);
                     }
 
                     // Unauthorized access token
                     if (packageResolutionResponse.code() == HTTP_UNAUTHORIZED) {
-                        handleUnauthorizedResponse(body);
+                        handleUnauthorizedResponse(body, pkgResolutionResBodyContent);
                     }
 
                     // If search request was sent wrongly
                     if (packageResolutionResponse.code() == HTTP_BAD_REQUEST) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(pkgResolutionResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new ConnectionErrorException(error.getMessage());
                         }
@@ -608,7 +610,7 @@ public class CentralAPIClient {
                     // If error occurred at remote repository
                     if (packageResolutionResponse.code() == HTTP_INTERNAL_ERROR ||
                             packageResolutionResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(pkgResolutionResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new ConnectionErrorException(ERR_PACKAGE_RESOLUTION + " reason:" +
                                     error.getMessage());
@@ -643,7 +645,8 @@ public class CentralAPIClient {
         Optional<ResponseBody> body = Optional.empty();
         OkHttpClient client = this.getClient();
         try {
-            RequestBody requestBody = RequestBody.create(JSON, new Gson().toJson(request));
+            String payload = new Gson().toJson(request);
+            RequestBody requestBody = RequestBody.create(JSON, payload);
             Request packageResolutionReq = getNewRequest(supportedPlatform, ballerinaVersion)
                     .post(requestBody)
                     .url(url)
@@ -654,31 +657,37 @@ public class CentralAPIClient {
             logRequestInitVerbose(packageResolutionReq);
             Call packageResolutionReqCall = client.newCall(packageResolutionReq);
             Response packageResolutionResponse = packageResolutionReqCall.execute();
-            logRequestConnectVerbose(packageResolutionReq, url);
+            logRequestConnectVerbose(packageResolutionReq, url, payload);
 
             body = Optional.ofNullable(packageResolutionResponse.body());
             String packageResolutionResBodyContent = null;
             if (body.isPresent()) {
                 packageResolutionResBodyContent = body.get().string();
             }
-            logResponseVerbose(packageResolutionResponse, packageResolutionResBodyContent);
+
+            String printableResponse = packageResolutionResBodyContent;
+            if (printableResponse != null && printableResponse.length() > 1000) {
+                printableResponse = printableResponse.substring(0, 1000) + "\n\n NOTE: Only the first 1000 " +
+                        "characters of the package resolution response body is printed for clarity.\n";
+            }
+            logResponseVerbose(packageResolutionResponse, printableResponse);
 
             if (body.isPresent()) {
                 Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
                     // If searching was successful
                     if (packageResolutionResponse.code() == HTTP_OK) {
-                        return new Gson().fromJson(body.get().string(), PackageResolutionResponse.class);
+                        return new Gson().fromJson(packageResolutionResBodyContent, PackageResolutionResponse.class);
                     }
 
                     // Unauthorized access token
                     if (packageResolutionResponse.code() == HTTP_UNAUTHORIZED) {
-                        handleUnauthorizedResponse(body);
+                        handleUnauthorizedResponse(body, packageResolutionResBodyContent);
                     }
 
                     // If search request was sent wrongly
                     if (packageResolutionResponse.code() == HTTP_BAD_REQUEST) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(packageResolutionResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new ConnectionErrorException(error.getMessage());
                         }
@@ -687,7 +696,7 @@ public class CentralAPIClient {
                     // If error occurred at remote repository
                     if (packageResolutionResponse.code() == HTTP_INTERNAL_ERROR ||
                             packageResolutionResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(packageResolutionResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new ConnectionErrorException(ERR_PACKAGE_RESOLUTION + " reason:" +
                                     error.getMessage());
@@ -739,17 +748,17 @@ public class CentralAPIClient {
                 if (contentType.isPresent()  && isApplicationJsonContentType(contentType.get().toString())) {
                     // If searching was successful
                     if (searchResponse.code() == HTTP_OK) {
-                        return new Gson().fromJson(body.get().string(), PackageSearchResult.class);
+                        return new Gson().fromJson(searchResBodyContent, PackageSearchResult.class);
                     }
 
                     // Unauthorized access token
                     if (searchResponse.code() == HTTP_UNAUTHORIZED) {
-                        handleUnauthorizedResponse(body);
+                        handleUnauthorizedResponse(body, searchResBodyContent);
                     }
 
                     // If search request was sent wrongly
                     if (searchResponse.code() == HTTP_BAD_REQUEST) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(searchResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new CentralClientException(error.getMessage());
                         }
@@ -758,7 +767,7 @@ public class CentralAPIClient {
                     // If error occurred at remote repository
                     if (searchResponse.code() == HTTP_INTERNAL_ERROR ||
                         searchResponse.code() == HTTP_UNAVAILABLE) {
-                        Error error = new Gson().fromJson(body.get().string(), Error.class);
+                        Error error = new Gson().fromJson(searchResBodyContent, Error.class);
                         if (error.getMessage() != null && !"".equals(error.getMessage())) {
                             throw new CentralClientException(ERR_CANNOT_SEARCH + "'" + query + "' reason:" +
                                     error.getMessage());
@@ -1002,11 +1011,14 @@ public class CentralAPIClient {
     private void logRequestInitVerbose(Request request) {
         if (this.verboseEnabled) {
             this.outStream.println("*** Trying " + request.url());
-
         }
     }
 
     private void logRequestConnectVerbose(Request request, String resourceUrl) {
+        logRequestConnectVerbose(request, resourceUrl, null);
+    }
+
+    private void logRequestConnectVerbose(Request request, String resourceUrl, String payload) {
         if (this.verboseEnabled) {
             this.outStream.println("* Connected to " + this.baseUrl);
             this.outStream.println("> " + request.method() + " " + resourceUrl + " HTTP");
@@ -1017,6 +1029,9 @@ public class CentralAPIClient {
                 } else {
                     this.outStream.println("> " + headerName + ": " + request.header(headerName));
                 }
+            }
+            if (payload != null) {
+                this.outStream.println("> Request: " + new Gson().toJson(request.body()) + "\n>");
             }
             this.outStream.println(">");
         }
@@ -1170,11 +1185,10 @@ public class CentralAPIClient {
      *
      * @param org  org name
      * @param body response body
-     * @throws IOException            when accessing response body
      * @throws CentralClientException with unauthorized error message
      */
     private void handleUnauthorizedResponse(String org, Optional<ResponseBody> body, String responseBody)
-            throws IOException, CentralClientException {
+            throws CentralClientException {
         if (body.isPresent()) {
             Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
             if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
@@ -1185,6 +1199,26 @@ public class CentralAPIClient {
                 throw new CentralClientException("unauthorized access token for organization: '" + org +
                         "'. check access token set in 'Settings.toml' file.");
             }
+        }
+    }
+
+    /**
+     * Handle unauthorized response.
+     *
+     * @param body response body
+     * @param responseStr response body as string
+     * @throws CentralClientException with unauthorized error message
+     */
+    private void handleUnauthorizedResponse(Optional<ResponseBody> body, String responseStr)
+            throws CentralClientException {
+        if (body.isPresent()) {
+            Optional<MediaType> contentType = Optional.ofNullable(body.get().contentType());
+            String errMsg = "unauthorized access token. check the access token set in 'Settings.toml' file.";
+            if (contentType.isPresent() && isApplicationJsonContentType(contentType.get().toString())) {
+                Error error = new Gson().fromJson(responseStr, Error.class);
+                errMsg += ", reason: " + error.getMessage();
+            }
+            throw new CentralClientException(errMsg);
         }
     }
 
