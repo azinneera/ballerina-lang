@@ -80,18 +80,21 @@ public class FileSystemRepository extends AbstractPackageRepository {
     Path bala;
     private final Path cacheDir;
     private final Environment environment;
+    private final Map<PackageOrg, Map<PackageName, List<PackageVersion>>> availableVersions;
 
     // TODO Refactor this when we do repository/cache split
     public FileSystemRepository(Environment environment, Path cacheDirectory) {
         this.cacheDir = cacheDirectory.resolve(ProjectConstants.CACHES_DIR_NAME);
         this.bala = cacheDirectory.resolve(ProjectConstants.REPO_BALA_DIR_NAME);
         this.environment = environment;
+        this.availableVersions = new HashMap<>();
     }
 
     public FileSystemRepository(Environment environment, Path cacheDirectory, String distributionVersion) {
         this.cacheDir = cacheDirectory.resolve(ProjectConstants.CACHES_DIR_NAME + "-" + distributionVersion);
         this.bala = cacheDirectory.resolve(ProjectConstants.REPO_BALA_DIR_NAME);
         this.environment = environment;
+        this.availableVersions = new HashMap<>();
     }
 
     @Override
@@ -204,6 +207,13 @@ public class FileSystemRepository extends AbstractPackageRepository {
     }
 
     protected List<PackageVersion> getPackageVersions(PackageOrg org, PackageName name, PackageVersion version) {
+        if (availableVersions.containsKey(org)) {
+            Map<PackageName, List<PackageVersion>> packageNameListMap = availableVersions.get(org);
+            if (packageNameListMap.containsKey(name)) {
+                return packageNameListMap.get(name);
+            }
+        }
+
         List<Path> versions = new ArrayList<>();
         try {
             Path balaPackagePath = bala.resolve(org.value()).resolve(name.value());
@@ -217,7 +227,13 @@ public class FileSystemRepository extends AbstractPackageRepository {
         }
 
         versions.removeAll(getIncompatibleVer(versions, org, name));
-        return pathToVersions(versions);
+        List<PackageVersion> versionList = pathToVersions(versions);
+        if (!availableVersions.containsKey(org)) {
+            availableVersions.put(org, new HashMap<>());
+        }
+        availableVersions.get(org).put(name, versionList);
+
+        return versionList;
     }
 
     protected List<Path> getIncompatibleVer(List<Path> versions, PackageOrg org, PackageName name) {
