@@ -44,6 +44,7 @@ import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.ProjectLoader;
 import io.ballerina.projects.directory.SingleFileProject;
+import io.ballerina.projects.environment.UpdatePolicy;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.tools.diagnostics.Diagnostic;
@@ -1462,18 +1463,12 @@ public class BallerinaWorkspaceManager implements WorkspaceManager {
         Path projectRoot = projectKindAndProjectRootPair.getRight();
         try {
             Project project;
+            BuildOptions options = BuildOptions.builder()
+                    .setOffline(CommonUtil.COMPILE_OFFLINE)
+                    .setUpdatePolicy(UpdatePolicy.HARD)
+                    .build();
             if (projectKind == ProjectKind.BUILD_PROJECT) {
-                project = BuildProject.load(projectRoot, buildOptions);
-
-                // TODO: Remove this once https://github.com/ballerina-platform/ballerina-lang/issues/43972 is resolved
-                // Save the dependencies.toml to resolve the inconsistencies issue in the subsequent builds
-                if (project.buildOptions().optimizeDependencyCompilation()) {
-                    BuildOptions newOptions = BuildOptions.builder()
-                            .setOffline(CommonUtil.COMPILE_OFFLINE)
-                            .setSticky(false)
-                            .build();
-                    project = BuildProject.load(projectRoot, newOptions);
-                }
+                project = BuildProject.load(projectRoot, options);
             } else if (projectKind == ProjectKind.SINGLE_FILE_PROJECT) {
                 project = SingleFileProject.load(projectRoot, buildOptions);
             } else {
