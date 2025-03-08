@@ -38,6 +38,7 @@ import org.wso2.ballerinalang.util.RepoUtils;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,7 +68,6 @@ import static io.ballerina.cli.cmd.Constants.HOME_COMMAND;
 import static io.ballerina.cli.cmd.Constants.INIT_COMMAND;
 import static io.ballerina.cli.cmd.Constants.LANG_SERVER_SPEC;
 import static io.ballerina.cli.cmd.Constants.NEW_COMMAND;
-import static io.ballerina.cli.cmd.Constants.OPENAPI_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PACK_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PERSIST_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PROFILE_COMMAND;
@@ -109,7 +109,7 @@ public final class BalToolsUtil {
             PUSH_COMMAND, SEARCH_COMMAND, SEMVER_COMMAND, GRAPH_COMMAND, DEPRECATE_COMMAND);
     // if a command is a built-in tool command, remove it from this list
     private static final List<String> otherCommands = Arrays.asList(CLEAN_COMMAND, FORMAT_COMMAND, BINDGEN_COMMAND,
-            SHELL_COMMAND, VERSION_COMMAND, OPENAPI_COMMAND, GRAPHQL_COMMAND, ASYNCAPI_COMMAND, GRPC_COMMAND,
+            SHELL_COMMAND, VERSION_COMMAND, GRAPHQL_COMMAND, ASYNCAPI_COMMAND, GRPC_COMMAND,
             PERSIST_COMMAND, PROFILE_COMMAND);
     private static final List<String> hiddenCommands = Arrays.asList(INIT_COMMAND, TOOL_COMMAND, DIST_COMMAND,
             UPDATE_COMMAND, START_LANG_SERVER_COMMAND, LANG_SERVER_SPEC, START_DEBUG_ADAPTER_COMMAND, HELP_COMMAND,
@@ -214,11 +214,12 @@ public final class BalToolsUtil {
 
     private static boolean isToolDistCompatibilityWithCurrentDist(BalToolsManifest.Tool tool) {
         SemanticVersion currentDistVersion = SemanticVersion.from(RepoUtils.getBallerinaShortVersion());
-        SemanticVersion toolDistVersion = getToolDistVersionFromCentralCache(tool);
-        return isVersionsCompatible(currentDistVersion, toolDistVersion);
+        Optional<SemanticVersion> toolDistVersion = getToolDistVersionFromCentralCache(tool);
+        return toolDistVersion.filter(semanticVersion ->
+                isVersionsCompatible(currentDistVersion, semanticVersion)).isPresent();
     }
 
-    private static SemanticVersion getToolDistVersionFromCentralCache(BalToolsManifest.Tool tool) {
+    private static Optional<SemanticVersion> getToolDistVersionFromCentralCache(BalToolsManifest.Tool tool) {
         Path centralBalaDirPath = ProjectUtils.createAndGetHomeReposPath().resolve(
                 Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, ProjectConstants.BALA_DIR_NAME));
         Path localBalaPath = ProjectUtils.createAndGetHomeReposPath().resolve(
@@ -226,8 +227,11 @@ public final class BalToolsUtil {
         Path balaPath =  CommandUtil.getPlatformSpecificBalaPath(
                 tool.org(), tool.name(), tool.version(), ProjectConstants.LOCAL_REPOSITORY_NAME
                         .equals(tool.repository()) ? localBalaPath : centralBalaDirPath);
+        if (!Files.exists(balaPath)) {
+            return Optional.empty();
+        }
         PackageJson packageJson = BalaFiles.readPackageJson(balaPath);
-        return SemanticVersion.from(packageJson.getBallerinaVersion());
+        return Optional.of(SemanticVersion.from(packageJson.getBallerinaVersion()));
     }
 
     private static boolean isVersionsCompatible(SemanticVersion localDistVersion,
