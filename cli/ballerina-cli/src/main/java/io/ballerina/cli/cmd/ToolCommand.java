@@ -30,8 +30,7 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Settings;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
-import io.ballerina.projects.internal.BalaFiles;
-import io.ballerina.projects.internal.model.PackageJson;
+import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
 import org.ballerinalang.central.client.CentralAPIClient;
@@ -62,6 +61,7 @@ import java.util.stream.Stream;
 
 import static io.ballerina.cli.cmd.Constants.TOOL_COMMAND;
 import static io.ballerina.cli.utils.PrintUtils.printTools;
+import static io.ballerina.projects.util.BalToolUtils.checkToolDistCompatibility;
 import static io.ballerina.projects.util.ProjectConstants.BALA_DIR_NAME;
 import static io.ballerina.projects.util.ProjectConstants.BAL_TOOLS_TOML;
 import static io.ballerina.projects.util.ProjectConstants.CENTRAL_REPOSITORY_CACHE_NAME;
@@ -101,6 +101,7 @@ public class ToolCommand implements BLauncherCmd {
     private final PrintStream errStream;
 
     Path balToolsTomlPath = RepoUtils.createAndGetHomeReposPath().resolve(Path.of(CONFIG_DIR, BAL_TOOLS_TOML));
+    Path distBalToolsTomlPath = ProjectUtils.getBalHomePath().resolve(BAL_TOOLS_TOML);
 
     @CommandLine.Parameters(description = "Manage ballerina tools")
     private List<String> argList;
@@ -293,8 +294,14 @@ public class ToolCommand implements BLauncherCmd {
         }
 
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(distBalToolsTomlPath);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        Optional<BalToolsManifest.Tool> tool = balToolsManifest.getTool(toolId, version, repositoryName);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                from(balToolsManifest, distBalToolsManifest);
+        Optional<BalToolsManifest.Tool> tool = blendedBalToolsManifest.getTool(toolId, version, repositoryName);
+
         if (tool.isEmpty()) {
             boolean isLocalTool = isToolAvailableInLocalRepo(toolId, version);
             if (isLocalTool) {
@@ -306,28 +313,33 @@ public class ToolCommand implements BLauncherCmd {
                 return;
             }
             CommandUtil.printError(errStream, "tool '" + toolId + ":" + version + "' is not found. " +
-                    "Run 'bal tool pull " + toolId + ":" + version
-                    + "' to fetch and set as the active version.", null, false);
+                    "Run 'bal tool pull " + toolId + ":" + version + "' to fetch and set as the active version.",
+                    null, false);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
         this.org = tool.get().org();
         this.name = tool.get().name();
-        Optional<BalToolsManifest.Tool> currentActiveTool = balToolsManifest.getActiveTool(toolId);
+        Optional<BalToolsManifest.Tool> currentActiveTool = blendedBalToolsManifest.getActiveTool(toolId);
         if (currentActiveTool.isPresent() && currentActiveTool.get().version().equals(tool.get().version()) &&
                 Objects.equals(currentActiveTool.get().repository(), tool.get().repository())) {
             outStream.println("tool '" + toolId + ":" + version + "' is the current active version.");
             return;
         }
 
-        boolean isDistsCompatible = checkToolDistCompatibility();
-        if (!isDistsCompatible) {
+        boolean isDistCompatible = checkToolDistCompatibility(org, name, version,
+                Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
+        if (!isDistCompatible) {
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
 
-        balToolsManifest.setActiveToolVersion(toolId, version, repositoryName);
-        balToolsToml.modify(balToolsManifest);
+        if (balToolsManifest.getTool(toolId, version, repositoryName).isPresent()) {
+            balToolsManifest.setActiveToolVersion(toolId, version, repositoryName);
+            balToolsToml.modify(balToolsManifest);
+        } else {
+            blendedBalToolsManifest.setActiveToolVersion(toolId, version, repositoryName);
+        }
         outStream.println("tool '" + toolId + ":" + version + "' successfully set as the active version.");
     }
 
@@ -338,7 +350,7 @@ public class ToolCommand implements BLauncherCmd {
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
-        List<BalToolsManifest.Tool> tools = listBalToolsTomlFile();
+        List<BalToolsManifest.Tool> tools = listBalToolsTomlFile(false);
         if (tools.isEmpty()) {
             outStream.println("no tools found locally.");
             return;
@@ -541,7 +553,8 @@ public class ToolCommand implements BLauncherCmd {
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
 
-        boolean isDistsCompatible = checkToolDistCompatibility();
+        boolean isDistsCompatible = checkToolDistCompatibility(org, name, version,
+                Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
         if (!isDistsCompatible) {
             CommandUtil.exitError(this.exitWhenFinish);
             return;
@@ -556,11 +569,22 @@ public class ToolCommand implements BLauncherCmd {
         outStream.println("tool '" + toolId + ":" + version + "' successfully set as the active version.");
     }
 
-    private List<BalToolsManifest.Tool> listBalToolsTomlFile() {
+    private List<BalToolsManifest.Tool> listBalToolsTomlFile(boolean all) {
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                from(balToolsManifest, distBalToolsManifest);
+
         List<BalToolsManifest.Tool> flattenedTools = new ArrayList<>();
-        balToolsManifest.tools().values().stream()
+        Map<String, Map<String, Map<String, BalToolsManifest.Tool>>> tools;
+        if (all) {
+            tools = blendedBalToolsManifest.tools();
+        } else {
+            tools = blendedBalToolsManifest.compatibleTools();
+        }
+        tools.values().stream()
                 .flatMap(map -> map.values().stream()).flatMap(map -> map.values().stream())
                 .sorted(Comparator.comparing(BalToolsManifest.Tool::id)
                         .thenComparing(BalToolsManifest.Tool::version).reversed())
@@ -597,7 +621,8 @@ public class ToolCommand implements BLauncherCmd {
 
         Optional<BalToolsManifest.Tool> tool = balToolsManifest.getTool(toolId, version, repositoryName);
         if (tool.isEmpty()) {
-            CommandUtil.printError(errStream, "tool '" + toolId + ":" + version + "' not found.", null, false);
+            CommandUtil.printError(errStream, "tool '" + toolId + ":" + version
+                    + "' not found in the local cache.", null, false);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
@@ -609,8 +634,16 @@ public class ToolCommand implements BLauncherCmd {
         }
         org = tool.get().org();
         name = tool.get().name();
-        boolean isDistsCompatible = checkToolDistCompatibility();
-        if (!isDistsCompatible) {
+
+        boolean isDistCompatible;
+        isDistCompatible = checkToolDistCompatibility(
+                org, name, version, Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
+        if (!isDistCompatible) {
+            CommandUtil.printError(errStream, "tool '" + toolId + ":" + version + "' is not compatible with the " +
+                            "current Ballerina distribution '" + RepoUtils.getBallerinaShortVersion() +
+                            "'. Use 'bal tool search' to select a version compatible with the current " +
+                            "Ballerina distribution.",
+                    null, false);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
@@ -716,44 +749,18 @@ public class ToolCommand implements BLauncherCmd {
         return false;
     }
 
-    private boolean checkToolDistCompatibility() {
-        SemanticVersion currentDistVersion = SemanticVersion.from(RepoUtils.getBallerinaShortVersion());
-        SemanticVersion toolDistVersion = LOCAL_REPOSITORY_NAME.equals(repositoryName)
-                ? getToolDistVersionFromCache(LOCAL_REPOSITORY_NAME)
-                : getToolDistVersionFromCache(CENTRAL_REPOSITORY_CACHE_NAME);
-        if (!isCompatibleWithLocalDistVersion(currentDistVersion, toolDistVersion)) {
-            CommandUtil.printError(errStream, "tool '" + toolId + ":" + version + "' is not compatible with the " +
-                    "current Ballerina distribution '" + RepoUtils.getBallerinaShortVersion() +
-                    "'. Use 'bal tool search' to select a version compatible with the current Ballerina distribution.",
-                    null, false);
-            return false;
-        }
-        return true;
-    }
-
-    private SemanticVersion getToolDistVersionFromCache(String repositoryName) {
-        Path balaDirPath = RepoUtils.createAndGetHomeReposPath()
-                .resolve(REPOSITORIES_DIR).resolve(repositoryName)
-                .resolve(ProjectConstants.BALA_DIR_NAME);
-        Path balaPath = CommandUtil.getPlatformSpecificBalaPath(org, name, version, balaDirPath);
-        PackageJson packageJson = BalaFiles.readPackageJson(balaPath);
-        return SemanticVersion.from(packageJson.getBallerinaVersion());
-    }
-
-    private boolean isCompatibleWithLocalDistVersion(SemanticVersion localDistVersion,
-                                                     SemanticVersion toolDistVersion) {
-        return localDistVersion.major() == toolDistVersion.major()
-                && localDistVersion.minor() >= toolDistVersion.minor();
-    }
-
     private boolean isToolVersionAlreadyActive(String toolId, String version) {
         if (version.equals(Names.EMPTY.getValue())) {
             return false;
         }
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(distBalToolsTomlPath);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        if (balToolsManifest.tools().containsKey(toolId)) {
-            Map<String, Map<String, BalToolsManifest.Tool>> toolVersions = balToolsManifest.tools().get(toolId);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                from(balToolsManifest, distBalToolsManifest);
+        if (blendedBalToolsManifest.tools().containsKey(toolId)) {
+            Map<String, Map<String, BalToolsManifest.Tool>> toolVersions = blendedBalToolsManifest.tools().get(toolId);
             return toolVersions.containsKey(version) && toolVersions.get(version).containsKey(repositoryName) &&
                     toolVersions.get(version).get(repositoryName).active();
         }
@@ -763,7 +770,11 @@ public class ToolCommand implements BLauncherCmd {
     private void updateToolToLatestVersion() {
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        Optional<BalToolsManifest.Tool> tool = balToolsManifest.getActiveTool(toolId);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                from(balToolsManifest, distBalToolsManifest);
+        Optional<BalToolsManifest.Tool> tool = blendedBalToolsManifest.getActiveTool(toolId);
         if (tool.isEmpty()) {
             CommandUtil.printError(errStream, "tool '" + toolId + "' is not installed.", null, false);
             CommandUtil.exitError(this.exitWhenFinish);

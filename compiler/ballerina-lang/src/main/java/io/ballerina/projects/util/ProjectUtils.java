@@ -77,6 +77,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -135,6 +136,10 @@ public final class ProjectUtils {
     private static final Pattern orgNamePattern = Pattern.compile("^[a-zA-Z0-9_]*$");
     private static final Pattern separatedIdentifierWithHyphenPattern = Pattern.compile("^[a-zA-Z0-9_.-]*$");
     private static final List<Diagnostic> projectLoadingDiagnostic = new ArrayList<>();
+
+    public static final String OPENAPI_TOOL_ID = "openapi";
+
+    public static final List<String> toolCommands = Arrays.asList(OPENAPI_TOOL_ID);
 
     private ProjectUtils() {
     }
@@ -1417,6 +1422,7 @@ public final class ProjectUtils {
         return "'" + RESOURCE_DIR_NAME + DIR_PATH_SEPARATOR +
                 DOT + WILD_CARD + "'";
     }
+
     /**
      * Denote the compatibility range of a given tool version.
      */

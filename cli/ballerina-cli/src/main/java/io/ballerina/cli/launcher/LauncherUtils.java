@@ -22,6 +22,7 @@ import io.ballerina.cli.launcher.util.BalToolsUtil;
 import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
+import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.runtime.api.values.BError;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
@@ -123,6 +124,7 @@ public final class LauncherUtils {
 
         Path balToolsTomlPath = RepoUtils.createAndGetHomeReposPath().resolve(CONFIG_DIR).resolve(BAL_TOOLS_TOML);
         BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(ProjectUtils.getBalHomePath().resolve(BAL_TOOLS_TOML));
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
         Map<String, String> activeToolsVsRepos = new HashMap<>();
 
