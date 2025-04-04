@@ -22,6 +22,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.ballerina.cli.BLauncherCmd;
+import io.ballerina.cli.launcher.util.BalToolsUtil;
 import io.ballerina.cli.utils.PrintUtils;
 import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
@@ -31,6 +32,7 @@ import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Settings;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
 import io.ballerina.projects.BlendedBalToolsManifest;
+import io.ballerina.projects.util.BalToolUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
 import org.ballerinalang.central.client.CentralAPIClient;
@@ -61,11 +63,8 @@ import java.util.stream.Stream;
 
 import static io.ballerina.cli.cmd.Constants.TOOL_COMMAND;
 import static io.ballerina.cli.utils.PrintUtils.printTools;
-import static io.ballerina.projects.util.BalToolUtils.checkToolDistCompatibility;
 import static io.ballerina.projects.util.ProjectConstants.BALA_DIR_NAME;
-import static io.ballerina.projects.util.ProjectConstants.BAL_TOOLS_TOML;
 import static io.ballerina.projects.util.ProjectConstants.CENTRAL_REPOSITORY_CACHE_NAME;
-import static io.ballerina.projects.util.ProjectConstants.CONFIG_DIR;
 import static io.ballerina.projects.util.ProjectConstants.LOCAL_REPOSITORY_NAME;
 import static io.ballerina.projects.util.ProjectConstants.REPOSITORIES_DIR;
 import static io.ballerina.projects.util.ProjectUtils.getAccessTokenOfCLI;
@@ -99,9 +98,6 @@ public class ToolCommand implements BLauncherCmd {
     private final boolean exitWhenFinish;
     private final PrintStream outStream;
     private final PrintStream errStream;
-
-    Path balToolsTomlPath = RepoUtils.createAndGetHomeReposPath().resolve(Path.of(CONFIG_DIR, BAL_TOOLS_TOML));
-    Path distBalToolsTomlPath = ProjectUtils.getBalHomePath().resolve(BAL_TOOLS_TOML);
 
     @CommandLine.Parameters(description = "Manage ballerina tools")
     private List<String> argList;
@@ -293,9 +289,9 @@ public class ToolCommand implements BLauncherCmd {
             return;
         }
 
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
-        BalToolsToml distBalToolsToml = BalToolsToml.from(distBalToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
 
         BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
@@ -327,7 +323,7 @@ public class ToolCommand implements BLauncherCmd {
             return;
         }
 
-        boolean isDistCompatible = checkToolDistCompatibility(org, name, version,
+        boolean isDistCompatible = BalToolUtils.checkToolDistCompatibility(org, name, version,
                 Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
         if (!isDistCompatible) {
             CommandUtil.exitError(this.exitWhenFinish);
@@ -550,10 +546,10 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private void addToBalToolsToml() {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
 
-        boolean isDistsCompatible = checkToolDistCompatibility(org, name, version,
+        boolean isDistsCompatible = BalToolUtils.checkToolDistCompatibility(org, name, version,
                 Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
         if (!isDistsCompatible) {
             CommandUtil.exitError(this.exitWhenFinish);
@@ -570,9 +566,9 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private List<BalToolsManifest.Tool> listBalToolsTomlFile(boolean all) {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        BalToolsToml distBalToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
         BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
                 from(balToolsManifest, distBalToolsManifest);
@@ -593,7 +589,7 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private void removeAllToolVersions() {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
 
         Optional<Map<String, Map<String, BalToolsManifest.Tool>>> toolVersions =
@@ -616,7 +612,7 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private void removeSpecificToolVersion() {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
 
         Optional<BalToolsManifest.Tool> tool = balToolsManifest.getTool(toolId, version, repositoryName);
@@ -636,7 +632,7 @@ public class ToolCommand implements BLauncherCmd {
         name = tool.get().name();
 
         boolean isDistCompatible;
-        isDistCompatible = checkToolDistCompatibility(
+        isDistCompatible = BalToolUtils.checkToolDistCompatibility(
                 org, name, version, Objects.requireNonNullElse(repositoryName, CENTRAL_REPOSITORY_CACHE_NAME));
         if (!isDistCompatible) {
             CommandUtil.printError(errStream, "tool '" + toolId + ":" + version + "' is not compatible with the " +
@@ -726,7 +722,7 @@ public class ToolCommand implements BLauncherCmd {
         if (version.equals(Names.EMPTY.getValue())) {
             return false;
         }
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
         Optional<BalToolsManifest.Tool> toolOptional = balToolsManifest.getTool(toolId, version, repositoryName);
         if (toolOptional.isEmpty()) {
@@ -753,9 +749,9 @@ public class ToolCommand implements BLauncherCmd {
         if (version.equals(Names.EMPTY.getValue())) {
             return false;
         }
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
-        BalToolsToml distBalToolsToml = BalToolsToml.from(distBalToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
         BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
                 from(balToolsManifest, distBalToolsManifest);
@@ -768,9 +764,9 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private void updateToolToLatestVersion() {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        BalToolsToml distBalToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
         BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
                 from(balToolsManifest, distBalToolsManifest);

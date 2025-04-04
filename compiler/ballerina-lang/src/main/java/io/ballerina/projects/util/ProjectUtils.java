@@ -137,10 +137,6 @@ public final class ProjectUtils {
     private static final Pattern separatedIdentifierWithHyphenPattern = Pattern.compile("^[a-zA-Z0-9_.-]*$");
     private static final List<Diagnostic> projectLoadingDiagnostic = new ArrayList<>();
 
-    public static final String OPENAPI_TOOL_ID = "openapi";
-
-    public static final List<String> toolCommands = Arrays.asList(OPENAPI_TOOL_ID);
-
     private ProjectUtils() {
     }
 

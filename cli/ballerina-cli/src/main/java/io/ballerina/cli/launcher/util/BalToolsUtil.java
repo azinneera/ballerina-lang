@@ -23,6 +23,7 @@ import io.ballerina.cli.cmd.ToolCommand;
 import io.ballerina.cli.launcher.LauncherUtils;
 import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
+import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.SemanticVersion;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -89,6 +91,7 @@ import static io.ballerina.projects.util.ProjectConstants.BALA_DIR_NAME;
 import static io.ballerina.projects.util.ProjectConstants.BAL_TOOLS_TOML;
 import static io.ballerina.projects.util.ProjectConstants.CENTRAL_REPOSITORY_CACHE_NAME;
 import static io.ballerina.projects.util.ProjectConstants.CONFIG_DIR;
+import static io.ballerina.projects.util.ProjectConstants.DIST_CACHE_DIRECTORY;
 import static io.ballerina.projects.util.ProjectConstants.REPOSITORIES_DIR;
 
 /**
@@ -116,12 +119,13 @@ public final class BalToolsUtil {
             HOME_COMMAND, GENCACHE_COMMAND);
     // if a command is a built-in tool command, add it to this list
     private static final List<String> builtInToolCommands = List.of();
-
-    private static final Path balToolsTomlPath = RepoUtils.createAndGetHomeReposPath().resolve(
-            Path.of(CONFIG_DIR, BAL_TOOLS_TOML));
     private static final Path balaCacheDirPath = ProjectUtils.createAndGetHomeReposPath()
             .resolve(REPOSITORIES_DIR).resolve(CENTRAL_REPOSITORY_CACHE_NAME)
             .resolve(ProjectConstants.BALA_DIR_NAME);
+
+    public static final Path BAL_TOOLS_TOML_PATH = RepoUtils.createAndGetHomeReposPath().resolve(
+            Path.of(CONFIG_DIR, BAL_TOOLS_TOML));
+    public static final Path DIST_BAL_TOOLS_TOML_PATH = ProjectUtils.getBalHomePath().resolve(BAL_TOOLS_TOML);
 
     private BalToolsUtil() {
     }
@@ -157,10 +161,13 @@ public final class BalToolsUtil {
         if (!builtInToolCommands.contains(commandName)) {
             return;
         }
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(DIST_BAL_TOOLS_TOML_PATH);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.from(balToolsManifest, distBalToolsManifest);
         // if built in tool is already added, return
-        if (balToolsManifest.getActiveTool(commandName).isPresent()) {
+        if (blendedBalToolsManifest.getActiveTool(commandName).isPresent()) {
             return;
         }
         ToolCommand toolCommand = new ToolCommand();
@@ -169,30 +176,43 @@ public final class BalToolsUtil {
 
     private static List<File> getToolCommandJarAndDependencyJars(String commandName) {
         Path userHomeDirPath = RepoUtils.createAndGetHomeReposPath();
-        Path balToolsTomlPath = userHomeDirPath.resolve(Path.of(CONFIG_DIR, BAL_TOOLS_TOML));
         Path centralBalaDirPath = userHomeDirPath.resolve(
                 Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, BALA_DIR_NAME));
+        Path distBalaDirPath = ProjectUtils.getBalHomePath().resolve(Path.of(DIST_CACHE_DIRECTORY, BALA_DIR_NAME));
         Path localBalaDirPath = userHomeDirPath.resolve(
                 Path.of(REPOSITORIES_DIR, ProjectConstants.LOCAL_REPOSITORY_NAME, BALA_DIR_NAME));
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.from(balToolsManifest,
+                distBalToolsManifest);
 
         // we load all tool jars for the help, default commands and --help, -h options
         if (HELP_COMMAND.equals(commandName)) {
-            return balToolsManifest.tools().values().stream()
+            return blendedBalToolsManifest.tools().values().stream()
                     .flatMap(map -> map.values().stream())
                     .flatMap(map -> map.values().stream())
                     .filter(BalToolsManifest.Tool::active)
-                    .map(tool1 -> findJarFiles(CommandUtil.getPlatformSpecificBalaPath(
-                        tool1.org(), tool1.name(), tool1.version(), ProjectConstants.LOCAL_REPOSITORY_NAME
-                                            .equals(tool1.repository()) ? localBalaDirPath : centralBalaDirPath)
-                                            .resolve(TOOL).resolve(LIBS)
-                        .toFile()))
+                    .map(tool1 -> {
+                        Path balaCache;
+                        if (ProjectConstants.LOCAL_REPOSITORY_NAME.equals(tool1.repository())) {
+                            balaCache = localBalaDirPath;
+                        } else if (ProjectConstants.DISTRIBUTION_REPOSITORY_NAME.equals(tool1.repository())) {
+                            balaCache = distBalaDirPath;
+                        } else {
+                            balaCache = centralBalaDirPath;
+                        }
+                        return findJarFiles(CommandUtil.getPlatformSpecificBalaPath(
+                                        tool1.org(), tool1.name(), tool1.version(), balaCache)
+                                .resolve(TOOL).resolve(LIBS)
+                                .toFile());
+                    })
                     .flatMap(List::stream)
                     .toList();
         }
 
-        Optional<BalToolsManifest.Tool> toolOpt = balToolsManifest.getActiveTool(commandName);
+        Optional<BalToolsManifest.Tool> toolOpt = blendedBalToolsManifest.getActiveTool(commandName);
         if (toolOpt.isPresent()) {
             BalToolsManifest.Tool tool = toolOpt.get();
             if (!isToolDistCompatibilityWithCurrentDist(tool)) {
@@ -267,27 +287,28 @@ public final class BalToolsUtil {
      * bal-tools.toml file when the user moves from updates 6, 7 to update 8 and above.
      */
     public static void updateOldBalToolsToml() {
-        BalToolsToml balToolsToml = BalToolsToml.from(balToolsTomlPath);
+        BalToolsToml balToolsToml = BalToolsToml.from(BAL_TOOLS_TOML_PATH);
         BalToolsManifestBuilder balToolsManifestBuilder = BalToolsManifestBuilder.from(balToolsToml);
         BalToolsManifest balToolsManifest = balToolsManifestBuilder.build();
         Map<String, BalToolsManifestBuilder.OldTool> oldTools = balToolsManifestBuilder.getOldTools();
         if (oldTools.isEmpty()) {
             return;
         }
-        oldTools.values().stream().forEach(tool -> {
+        oldTools.values().forEach(tool -> {
             Path toolCachePath = balaCacheDirPath.resolve(Path.of(tool.org(), tool.name()));
             if (toolCachePath.toFile().isDirectory()) {
-                List<String> versions = Arrays.stream(toolCachePath.toFile().listFiles((dir, name) -> {
+                List<String> versions = Arrays.stream(Objects.requireNonNull(toolCachePath.toFile()
+                        .listFiles((dir, name) -> {
                     try {
                         PackageVersion.from(name);
                         return true;
                     } catch (ProjectException ignore) {
                         return false;
                     }
-                })).map(File::getName).toList();
+                }))).map(File::getName).toList();
 
                 Optional<String> latestVersion = getLatestVersion(versions);
-                versions.stream().forEach(version -> {
+                versions.forEach(version -> {
                     // If there is no current active version in balToolsManifest, we set the latest version in the
                     // central cache as active. This is because in U6, U7, the latest is automatically picked as active.
                     boolean isActive = balToolsManifest.getActiveTool(tool.id()).isEmpty()
