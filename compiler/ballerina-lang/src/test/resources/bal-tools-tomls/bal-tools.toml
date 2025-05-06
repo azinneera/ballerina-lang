@@ -90,7 +90,6 @@ name = "tool_grpc"
 version = "1.0.2"
 active = false
 
-
 [[tool]]
 id = "bindgen"
 org = "ballerina"

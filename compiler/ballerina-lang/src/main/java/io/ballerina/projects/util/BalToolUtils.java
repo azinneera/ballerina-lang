@@ -17,20 +17,19 @@
  */
 package io.ballerina.projects.util;
 
+import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.internal.BalaFiles;
 import io.ballerina.projects.internal.model.PackageJson;
 import org.wso2.ballerinalang.util.RepoUtils;
 
 import java.nio.file.Path;
-import java.util.List;
+import java.util.Set;
 
 import static io.ballerina.projects.util.ProjectConstants.CENTRAL_REPOSITORY_CACHE_NAME;
 import static io.ballerina.projects.util.ProjectConstants.REPOSITORIES_DIR;
 
 public class BalToolUtils {
-
-    public static final String OPENAPI_COMMAND = "openapi";
 
     public static boolean isCompatibleWithLocalDistVersion(
             SemanticVersion localDistVersion, SemanticVersion toolDistVersion) {
@@ -52,14 +51,14 @@ public class BalToolUtils {
     }
 
     public static SemanticVersion.VersionCompatibilityResult compareWithDist(
-            String org, String name, String versions) {
+            String org, String name, String versions, String repository) {
         SemanticVersion currentDistVersion = SemanticVersion.from(RepoUtils.getBallerinaShortVersion());
-        SemanticVersion toolDistVersion = getToolDistVersionFromCache(org, name, versions,
-                CENTRAL_REPOSITORY_CACHE_NAME);
+        SemanticVersion toolDistVersion = getToolDistVersionFromCache(org, name, versions, repository);
         return toolDistVersion.compareTo(currentDistVersion);
     }
 
-    private static SemanticVersion getToolDistVersionFromCache(String org, String name, String version, String repository) {
+    private static SemanticVersion getToolDistVersionFromCache(
+            String org, String name, String version, String repository) {
         if (repository == null) {
             repository = CENTRAL_REPOSITORY_CACHE_NAME;
         }
@@ -70,7 +69,7 @@ public class BalToolUtils {
         return SemanticVersion.from(packageJson.getBallerinaVersion());
     }
 
-    public static List<String> getInBuiltToolCommands() {
-        return List.of(OPENAPI_COMMAND);
+    public static Set<String> getInBuiltToolCommands(BalToolsManifest distBalToolsManifest) {
+        return distBalToolsManifest.tools().keySet();
     }
 }

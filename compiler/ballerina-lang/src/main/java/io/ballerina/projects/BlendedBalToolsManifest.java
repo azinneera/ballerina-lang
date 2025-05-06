@@ -42,11 +42,20 @@ public class BlendedBalToolsManifest {
 
     private static BlendedBalToolsManifest mergeBalToolManifests(BalToolsManifest localBalToolsManifest,
             BalToolsManifest distBalToolsManifest) {
+
+        if (localBalToolsManifest.tools().isEmpty()) {
+            // No tools installed, return the distribution bal-tools.toml
+            return new BlendedBalToolsManifest(distBalToolsManifest.tools());
+        }
+        if (distBalToolsManifest.tools().isEmpty()) {
+            // No distribution tools, return the local bal-tools.toml
+            return new BlendedBalToolsManifest(localBalToolsManifest.tools());
+        }
         Map<String, Map<String, Map<String, BalToolsManifest.Tool>>> mergedTools =
                 new HashMap<>(localBalToolsManifest.tools());
 
         for (String toolId : mergedTools.keySet()) {
-            if (BalToolUtils.getInBuiltToolCommands().contains(toolId)) {
+            if (BalToolUtils.getInBuiltToolCommands(distBalToolsManifest).contains(toolId)) {
                 continue;
             }
             Optional<BalToolsManifest.Tool> activeTool = localBalToolsManifest.getActiveTool(toolId);
@@ -60,7 +69,7 @@ public class BlendedBalToolsManifest {
 
             // Set the active tool version if the current active version is incompatible with the distribution
             SemanticVersion.VersionCompatibilityResult versionCompatibilityResult =
-                    BalToolUtils.compareWithDist(org, name, version);
+                    BalToolUtils.compareWithDist(org, name, version, activeTool.get().repository());
 
             if (!versionCompatibilityResult.equals(SemanticVersion.VersionCompatibilityResult.EQUAL)) {
                 Optional<PackageVersion> highestVersion = getHighestCompatibleLocalVersion(localBalToolsManifest,
@@ -84,7 +93,7 @@ public class BlendedBalToolsManifest {
         // the distribution bal-tools.toml
         // 4. if there is a version in the local bal-tools.toml are > the version in the distribution bal-tools.toml, return
         // the local bal-tools.toml
-        for (String toolCommand : BalToolUtils.getInBuiltToolCommands()) {
+        for (String toolCommand : BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)) {
             Optional<BalToolsManifest.Tool> activeToolDist = distBalToolsManifest.getActiveTool(toolCommand);
             if (!mergedTools.containsKey(toolCommand)) {
                 BalToolsManifest.Tool tool = activeToolDist.orElseThrow();
@@ -107,8 +116,35 @@ public class BlendedBalToolsManifest {
 
             BalToolsManifest.Tool localTool = activeToolLocal.get();
             SemanticVersion.VersionCompatibilityResult versionCompatibilityResult =
-                    BalToolUtils.compareWithDist(localTool.org(), localTool.name(), localTool.version());
-            if (versionCompatibilityResult.equals(SemanticVersion.VersionCompatibilityResult.LESS_THAN)) {
+                    BalToolUtils.compareWithDist(
+                            localTool.org(), localTool.name(), localTool.version(), localTool.repository());
+            if (!versionCompatibilityResult.equals(SemanticVersion.VersionCompatibilityResult.GREATER_THAN)) {
+                // Locally active version is incompatible
+                BalToolsManifest.Tool tool = activeToolDist.orElseThrow();
+                PackageVersion latest = ProjectUtils.getLatest(
+                        PackageVersion.from(localTool.version()), PackageVersion.from(tool.version()));
+                if (latest.equals(PackageVersion.from(localTool.version()))) {
+                    // locally active version is the highest compatible
+                    continue;
+                }
+                BalToolsManifest.Tool toolNew = new BalToolsManifest.Tool(
+                        tool.id(), tool.org(), tool.name(), tool.version(), true, DISTRIBUTION_REPOSITORY_NAME);
+                mergedTools.get(toolCommand).put(tool.version(), Map.of(DISTRIBUTION_REPOSITORY_NAME, toolNew));
+                mergedTools.get(localTool.id()).get(localTool.version()).get(null).setActive(false);
+                continue;
+            }
+
+            // 2. Locally active version is incompatible
+
+            // Check if dist version is higher than the highest compatible version in the local bal-tools.toml
+            Optional<PackageVersion> highestVersion = getHighestCompatibleLocalVersion(localBalToolsManifest,
+                    localTool.id(), localTool.org(), localTool.name());
+            if (highestVersion.isEmpty() ||
+                    highestVersion.get().compareTo(PackageVersion.from(activeToolDist.orElseThrow().version()))
+                            .equals(SemanticVersion.VersionCompatibilityResult.LESS_THAN)) {
+                mergedTools.get(localTool.id()).forEach((k, v) -> v.forEach((k1, v1) -> v1.setActive(false)));
+                mergedTools.get(localTool.id()).get(localTool.version()).get(null).setActive(false);
+
                 BalToolsManifest.Tool tool = activeToolDist.orElseThrow();
                 BalToolsManifest.Tool toolNew = new BalToolsManifest.Tool(
                         tool.id(), tool.org(), tool.name(), tool.version(), true, DISTRIBUTION_REPOSITORY_NAME);
@@ -116,33 +152,14 @@ public class BlendedBalToolsManifest {
                 continue;
             }
 
-            if (versionCompatibilityResult.equals(SemanticVersion.VersionCompatibilityResult.GREATER_THAN)) {
-                // 2. Locally active version is incompatible
+            // 4. Highest local version is greater than the distribution version
+            BalToolsManifest.Tool tool = new BalToolsManifest.Tool(
+                    localTool.id(), localTool.org(), localTool.name(),
+                    highestVersion.toString(), true, localTool.repository());
+            mergedTools.get(localTool.id()).forEach((k, v) -> v.forEach((k1, v1) -> v1.setActive(false)));
+            mergedTools.get(tool.id()).get(localTool.version()).get(null).setActive(false);
+            mergedTools.get(tool.id()).get(highestVersion.get().toString()).get(null).setActive(true);
 
-                // Check if dist version is higher than the highest compatible version in the local bal-tools.toml
-                Optional<PackageVersion> highestVersion = getHighestCompatibleLocalVersion(localBalToolsManifest,
-                        localTool.id(), localTool.org(), localTool.name());
-                if (highestVersion.isEmpty() ||
-                        highestVersion.get().compareTo(PackageVersion.from(activeToolDist.orElseThrow().version()))
-                        .equals(SemanticVersion.VersionCompatibilityResult.LESS_THAN)) {
-                    mergedTools.get(localTool.id()).forEach((k, v) -> v.forEach((k1, v1) -> v1.setActive(false)));
-                    mergedTools.get(localTool.id()).get(localTool.version()).get(null).setActive(false);
-
-                    BalToolsManifest.Tool tool = activeToolDist.orElseThrow();
-                    BalToolsManifest.Tool toolNew = new BalToolsManifest.Tool(
-                            tool.id(), tool.org(), tool.name(), tool.version(), true, DISTRIBUTION_REPOSITORY_NAME);
-                    mergedTools.get(toolCommand).put(tool.version(), Map.of(DISTRIBUTION_REPOSITORY_NAME, toolNew));
-                    continue;
-                }
-
-                // 4. Highest local version is greater than the distribution version
-                BalToolsManifest.Tool tool = new BalToolsManifest.Tool(
-                        localTool.id(), localTool.org(), localTool.name(),
-                        highestVersion.toString(), true, localTool.repository());
-                mergedTools.get(localTool.id()).forEach((k, v) -> v.forEach((k1, v1) -> v1.setActive(false)));
-                mergedTools.get(tool.id()).get(localTool.version()).get(null).setActive(false);
-                mergedTools.get(tool.id()).get(highestVersion.get().toString()).get(null).setActive(true);
-            }
             // Leave the current active version as it is
         }
 
@@ -159,7 +176,7 @@ public class BlendedBalToolsManifest {
                 .toList());
 
         // Check if there are any compatible versions in the local bal-tools.toml
-        toolVersions.removeIf(version -> BalToolUtils.compareWithDist(org, name, version.toString())
+        toolVersions.removeIf(version -> BalToolUtils.compareWithDist(org, name, version.toString(), null)
                 .equals(SemanticVersion.VersionCompatibilityResult.GREATER_THAN));
 
         if (toolVersions.isEmpty()) {

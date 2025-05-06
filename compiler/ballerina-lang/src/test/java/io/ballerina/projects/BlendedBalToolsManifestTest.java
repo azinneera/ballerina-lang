@@ -19,9 +19,6 @@ package io.ballerina.projects;
 
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
 import io.ballerina.projects.util.BalToolUtils;
-import io.ballerina.projects.util.ProjectUtils;
-import org.ballerinalang.central.client.CentralClientConstants;
-import org.ballerinalang.central.client.exceptions.CentralClientException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.testng.Assert;
@@ -30,11 +27,12 @@ import org.testng.annotations.Test;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.when;
 
@@ -45,7 +43,7 @@ public class BlendedBalToolsManifestTest {
 
     private BalToolsManifest balToolsManifest;
     private BalToolsManifest distBalToolsManifest;
-    private final List<String> toolCommands = List.of("openapi", "asyncapi", "graphql", "edi", "persist", "grpc");
+    private final Set<String> toolCommands = Set.of("openapi", "asyncapi", "graphql", "edi", "persist", "grpc");
 
     @BeforeClass
     public void setup() {
@@ -75,9 +73,9 @@ public class BlendedBalToolsManifestTest {
     public void testToolOnlyInDist() {
         // persist
         try (MockedStatic<BalToolUtils> utils = Mockito.mockStatic(BalToolUtils.class, CALLS_REAL_METHODS)) {
-            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString()))
+            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString(), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            when(BalToolUtils.getInBuiltToolCommands()).thenReturn(this.toolCommands);
+            when(BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)).thenReturn(this.toolCommands);
 
             BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
                     .from(balToolsManifest, distBalToolsManifest);
@@ -90,9 +88,9 @@ public class BlendedBalToolsManifestTest {
     public void testToolOnlyInLocal() {
         // consolidate-packages
         try (MockedStatic<BalToolUtils> utils = Mockito.mockStatic(BalToolUtils.class, CALLS_REAL_METHODS)) {
-            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString()))
+            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString(), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            when(BalToolUtils.getInBuiltToolCommands()).thenReturn(this.toolCommands);
+            when(BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)).thenReturn(this.toolCommands);
 
             BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
                     .from(balToolsManifest, distBalToolsManifest);
@@ -105,15 +103,15 @@ public class BlendedBalToolsManifestTest {
     @Test
     public void testLocalActiveAvailableWithSameDist() {
         try (MockedStatic<BalToolUtils> utils = Mockito.mockStatic(BalToolUtils.class, CALLS_REAL_METHODS)) {
-            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString()))
+            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString(), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            when(BalToolUtils.getInBuiltToolCommands()).thenReturn(this.toolCommands);
+            when(BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)).thenReturn(this.toolCommands);
 
             BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
                     .from(balToolsManifest, distBalToolsManifest);
             // local active < dist - edi
             Optional<BalToolsManifest.Tool> activeEdiTool = blendedBalToolsManifest.getActiveTool("edi");
-            Assert.assertEquals(activeEdiTool.orElseThrow().version(), "1.0.0");
+            Assert.assertEquals(activeEdiTool.orElseThrow().version(), "1.1.0");
 
             // local active >= dist - graphql
             Optional<BalToolsManifest.Tool> activeGraphqlTool = blendedBalToolsManifest.getActiveTool("graphql");
@@ -124,44 +122,53 @@ public class BlendedBalToolsManifestTest {
     @Test
     public void testLocalActiveWithHigherDist() {
         try (MockedStatic<BalToolUtils> utils = Mockito.mockStatic(BalToolUtils.class, CALLS_REAL_METHODS)) {
-            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString()))
+            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString(), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_openapi", "1.3.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_openapi"), eq("1.3.0"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.GREATER_THAN);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_openapi", "1.1.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_openapi"), eq("1.1.0"), any()))
                             .thenReturn(SemanticVersion.VersionCompatibilityResult.LESS_THAN);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_openapi", "1.2.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_openapi"), eq("1.2.0"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_openapi", "1.2.1"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_openapi"), eq("1.2.1"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_openapi", "1.2.2"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_openapi"), eq("1.2.2"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
 
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_asyncapi", "1.0.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_asyncapi"), eq("1.0.0"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_asyncapi", "1.1.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_asyncapi"), eq("1.1.0"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            utils.when(() -> BalToolUtils.compareWithDist("ballerina", "tool_asyncapi", "1.2.0"))
+            utils.when(() -> BalToolUtils.compareWithDist(
+                    eq("ballerina"), eq("tool_asyncapi"), eq("1.2.0"), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.GREATER_THAN);
-            when(BalToolUtils.getInBuiltToolCommands()).thenReturn(this.toolCommands);
+            when(BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)).thenReturn(this.toolCommands);
+
             BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
                     .from(balToolsManifest, distBalToolsManifest);
 
             Optional<BalToolsManifest.Tool> activeOpenApiTool = blendedBalToolsManifest.getActiveTool("openapi");
-            Assert.assertEquals(activeOpenApiTool.orElseThrow().version(), "1.2.1");
+            Assert.assertEquals(activeOpenApiTool.orElseThrow().version(),
+                    "1.2.1"); // 1.2.2 is ignored since the repo is local
 
             Optional<BalToolsManifest.Tool> activeAsyncApiTool = blendedBalToolsManifest.getActiveTool("asyncapi");
-            Assert.assertEquals(activeAsyncApiTool.orElseThrow().version(), "1.1.0");
+            Assert.assertEquals(activeAsyncApiTool.orElseThrow().version(), "1.1.0"); // 1.2.0 is incompatible
         }
     }
 
     @Test
     public void noLocallyActiveVersions() {
         try (MockedStatic<BalToolUtils> utils = Mockito.mockStatic(BalToolUtils.class, CALLS_REAL_METHODS)) {
-            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString()))
+            utils.when(() -> BalToolUtils.compareWithDist(anyString(), anyString(), anyString(), any()))
                     .thenReturn(SemanticVersion.VersionCompatibilityResult.EQUAL);
-            when(BalToolUtils.getInBuiltToolCommands()).thenReturn(this.toolCommands);
+            when(BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)).thenReturn(this.toolCommands);
 
             BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
                     .from(balToolsManifest, distBalToolsManifest);

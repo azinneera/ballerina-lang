@@ -70,6 +70,7 @@ import static io.ballerina.cli.cmd.Constants.HOME_COMMAND;
 import static io.ballerina.cli.cmd.Constants.INIT_COMMAND;
 import static io.ballerina.cli.cmd.Constants.LANG_SERVER_SPEC;
 import static io.ballerina.cli.cmd.Constants.NEW_COMMAND;
+import static io.ballerina.cli.cmd.Constants.OPENAPI_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PACK_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PERSIST_COMMAND;
 import static io.ballerina.cli.cmd.Constants.PROFILE_COMMAND;
@@ -112,7 +113,7 @@ public final class BalToolsUtil {
             PUSH_COMMAND, SEARCH_COMMAND, SEMVER_COMMAND, GRAPH_COMMAND, DEPRECATE_COMMAND);
     // if a command is a built-in tool command, remove it from this list
     private static final List<String> otherCommands = Arrays.asList(CLEAN_COMMAND, FORMAT_COMMAND, BINDGEN_COMMAND,
-            SHELL_COMMAND, VERSION_COMMAND, GRAPHQL_COMMAND, ASYNCAPI_COMMAND, GRPC_COMMAND,
+            SHELL_COMMAND, VERSION_COMMAND, OPENAPI_COMMAND, GRAPHQL_COMMAND, ASYNCAPI_COMMAND, GRPC_COMMAND,
             PERSIST_COMMAND, PROFILE_COMMAND);
     private static final List<String> hiddenCommands = Arrays.asList(INIT_COMMAND, TOOL_COMMAND, DIST_COMMAND,
             UPDATE_COMMAND, START_LANG_SERVER_COMMAND, LANG_SERVER_SPEC, START_DEBUG_ADAPTER_COMMAND, HELP_COMMAND,
@@ -175,15 +176,9 @@ public final class BalToolsUtil {
     }
 
     private static List<File> getToolCommandJarAndDependencyJars(String commandName) {
-        Path userHomeDirPath = RepoUtils.createAndGetHomeReposPath();
-        Path centralBalaDirPath = userHomeDirPath.resolve(
-                Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, BALA_DIR_NAME));
-        Path distBalaDirPath = ProjectUtils.getBalHomePath().resolve(Path.of(DIST_CACHE_DIRECTORY, BALA_DIR_NAME));
-        Path localBalaDirPath = userHomeDirPath.resolve(
-                Path.of(REPOSITORIES_DIR, ProjectConstants.LOCAL_REPOSITORY_NAME, BALA_DIR_NAME));
         BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
-        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
         BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.from(balToolsManifest,
                 distBalToolsManifest);
@@ -194,20 +189,10 @@ public final class BalToolsUtil {
                     .flatMap(map -> map.values().stream())
                     .flatMap(map -> map.values().stream())
                     .filter(BalToolsManifest.Tool::active)
-                    .map(tool1 -> {
-                        Path balaCache;
-                        if (ProjectConstants.LOCAL_REPOSITORY_NAME.equals(tool1.repository())) {
-                            balaCache = localBalaDirPath;
-                        } else if (ProjectConstants.DISTRIBUTION_REPOSITORY_NAME.equals(tool1.repository())) {
-                            balaCache = distBalaDirPath;
-                        } else {
-                            balaCache = centralBalaDirPath;
-                        }
-                        return findJarFiles(CommandUtil.getPlatformSpecificBalaPath(
-                                        tool1.org(), tool1.name(), tool1.version(), balaCache)
-                                .resolve(TOOL).resolve(LIBS)
-                                .toFile());
-                    })
+                    .map(tool1 -> findJarFiles(CommandUtil.getPlatformSpecificBalaPath(
+                                    tool1.org(), tool1.name(), tool1.version(), getRepoPath(tool1.repository()))
+                            .resolve(TOOL).resolve(LIBS)
+                            .toFile()))
                     .flatMap(List::stream)
                     .toList();
         }
@@ -222,14 +207,26 @@ public final class BalToolsUtil {
                         "'. Use 'bal tool search' to select a version compatible with the " +
                         "current Ballerina distribution.";
                 throw LauncherUtils.createLauncherException(errMsg);
-            }
+            };
             Path platformPath = CommandUtil.getPlatformSpecificBalaPath(
-                    tool.org(), tool.name(), tool.version(), ProjectConstants.LOCAL_REPOSITORY_NAME
-                            .equals(tool.repository()) ? localBalaDirPath : centralBalaDirPath);
+                    tool.org(), tool.name(), tool.version(), getRepoPath(tool.repository()));
             File libsDir = platformPath.resolve(Path.of(TOOL, LIBS)).toFile();
             return findJarFiles(libsDir);
         }
         throw LauncherUtils.createUsageExceptionWithHelp("unknown command '" + commandName + "'");
+    }
+
+    private static Path getRepoPath(String repoName) {
+        if (ProjectConstants.LOCAL_REPOSITORY_NAME.equals(repoName)) {
+            return ProjectUtils.createAndGetHomeReposPath().resolve(
+                    Path.of(REPOSITORIES_DIR, ProjectConstants.LOCAL_REPOSITORY_NAME, ProjectConstants.BALA_DIR_NAME));
+        } else if (ProjectConstants.DISTRIBUTION_REPOSITORY_NAME.equals(repoName)) {
+            return ProjectUtils.getBalHomePath().resolve(
+                    Path.of(DIST_CACHE_DIRECTORY, ProjectConstants.BALA_DIR_NAME));
+        } else {
+            return ProjectUtils.createAndGetHomeReposPath().resolve(
+                    Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, ProjectConstants.BALA_DIR_NAME));
+        }
     }
 
     private static boolean isToolDistCompatibilityWithCurrentDist(BalToolsManifest.Tool tool) {
@@ -240,13 +237,20 @@ public final class BalToolsUtil {
     }
 
     private static Optional<SemanticVersion> getToolDistVersionFromCentralCache(BalToolsManifest.Tool tool) {
-        Path centralBalaDirPath = ProjectUtils.createAndGetHomeReposPath().resolve(
-                Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, ProjectConstants.BALA_DIR_NAME));
-        Path localBalaPath = ProjectUtils.createAndGetHomeReposPath().resolve(
-                Path.of(REPOSITORIES_DIR, ProjectConstants.LOCAL_REPOSITORY_NAME, ProjectConstants.BALA_DIR_NAME));
+        Path repoBalaDirPath;
+        if (ProjectConstants.LOCAL_REPOSITORY_NAME.equals(tool.repository())) {
+            repoBalaDirPath = ProjectUtils.createAndGetHomeReposPath().resolve(
+                    Path.of(REPOSITORIES_DIR, ProjectConstants.LOCAL_REPOSITORY_NAME, ProjectConstants.BALA_DIR_NAME));
+        } else if (ProjectConstants.DISTRIBUTION_REPOSITORY_NAME.equals(tool.repository())) {
+            repoBalaDirPath = ProjectUtils.getBalHomePath().resolve(
+                    Path.of(DIST_CACHE_DIRECTORY, ProjectConstants.BALA_DIR_NAME));
+        } else {
+            repoBalaDirPath = ProjectUtils.createAndGetHomeReposPath().resolve(
+                    Path.of(REPOSITORIES_DIR, CENTRAL_REPOSITORY_CACHE_NAME, ProjectConstants.BALA_DIR_NAME));
+        }
+
         Path balaPath =  CommandUtil.getPlatformSpecificBalaPath(
-                tool.org(), tool.name(), tool.version(), ProjectConstants.LOCAL_REPOSITORY_NAME
-                        .equals(tool.repository()) ? localBalaPath : centralBalaDirPath);
+                tool.org(), tool.name(), tool.version(), repoBalaDirPath);
         if (!Files.exists(balaPath)) {
             return Optional.empty();
         }
