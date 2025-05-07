@@ -23,9 +23,7 @@ import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
 import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
-import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.runtime.api.values.BError;
-import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -40,8 +38,6 @@ import java.util.List;
 import java.util.Map;
 
 import static io.ballerina.cli.launcher.BallerinaCliCommands.HELP;
-import static io.ballerina.projects.util.ProjectConstants.BAL_TOOLS_TOML;
-import static io.ballerina.projects.util.ProjectConstants.CONFIG_DIR;
 
 /**
  * Contains utility methods for executing a Ballerina program.

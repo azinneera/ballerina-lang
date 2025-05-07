@@ -18,8 +18,10 @@
 
 package io.ballerina.cli.cmd;
 
+import io.ballerina.cli.launcher.util.BalToolsUtil;
 import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
+import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.Settings;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
 import org.mockito.MockedStatic;
@@ -82,8 +84,13 @@ public class ToolCommandTest extends BaseCommandTest {
         Assert.assertEquals(buildLog.replace("\r", ""), "tool 'luhee:1.1.0' successfully set as the active version.\n");
         Assert.assertTrue(Files.exists(mockHomeRepo.resolve(".config").resolve("bal-tools.toml")));
         BalToolsToml balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config").resolve("bal-tools.toml"));
-        BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-        Optional<BalToolsManifest.Tool> tool = balToolsManifest.getActiveTool("luhee");
+        BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+        BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
+        BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                from(balToolsManifest, distBalToolsManifest);
+        Optional<BalToolsManifest.Tool> tool = blendedBalToolsManifest.getActiveTool("luhee");
         Assert.assertTrue(tool.isPresent());
         Assert.assertEquals(tool.get().version(), "1.1.0");
         Assert.assertEquals(tool.get().repository(), "local");
@@ -110,8 +117,13 @@ public class ToolCommandTest extends BaseCommandTest {
                     .contains("tool 'luhee:1.2.0' successfully set as the active version.\n"), buildLog);
             Assert.assertTrue(Files.exists(mockHomeRepo.resolve(".config").resolve("bal-tools.toml")));
             BalToolsToml balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config").resolve("bal-tools.toml"));
-            BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-            Optional<BalToolsManifest.Tool> tool = balToolsManifest.getActiveTool("luhee");
+            BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+            BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
+            BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+
+            BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                    from(balToolsManifest, distBalToolsManifest);
+            Optional<BalToolsManifest.Tool> tool = blendedBalToolsManifest.getActiveTool("luhee");
             Assert.assertTrue(tool.isPresent());
             Assert.assertEquals(tool.get().version(), "1.2.0");
             Assert.assertEquals(tool.get().repository(), "local");
@@ -125,8 +137,11 @@ public class ToolCommandTest extends BaseCommandTest {
             Assert.assertTrue(buildLog.replace("\r", "")
                     .contains("tool 'luhee:1.1.0' successfully set as the active version.\n"));
             balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config").resolve("bal-tools.toml"));
-            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-            tool = balToolsManifest.getActiveTool("luhee");
+            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+            blendedBalToolsManifest = BlendedBalToolsManifest.
+                    from(balToolsManifest, distBalToolsManifest);
+
+            tool = blendedBalToolsManifest.getActiveTool("luhee");
             Assert.assertTrue(tool.isPresent());
             Assert.assertEquals(tool.get().version(), "1.1.0");
             Assert.assertEquals(tool.get().repository(), "local");
@@ -155,8 +170,13 @@ public class ToolCommandTest extends BaseCommandTest {
             Assert.assertTrue(Files.exists(mockHomeRepo.resolve(".config").resolve("bal-tools.toml")));
             BalToolsToml balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config")
                     .resolve("bal-tools.toml"));
-            BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-            Optional<BalToolsManifest.Tool> tool = balToolsManifest.getActiveTool("luhee");
+            BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+            BalToolsToml distBalToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
+            BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
+
+            BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.
+                    from(balToolsManifest, distBalToolsManifest);
+            Optional<BalToolsManifest.Tool> tool = blendedBalToolsManifest.getActiveTool("luhee");
             Assert.assertTrue(tool.isPresent());
             Assert.assertEquals(tool.get().version(), "1.2.0");
             Assert.assertEquals(tool.get().repository(), "local");
@@ -170,8 +190,11 @@ public class ToolCommandTest extends BaseCommandTest {
             Assert.assertTrue(buildLog.replace("\r", "")
                     .contains("tool 'luhee:1.1.0' successfully set as the active version.\n"));
             balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config").resolve("bal-tools.toml"));
-            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-            tool = balToolsManifest.getActiveTool("luhee");
+            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+
+            blendedBalToolsManifest = BlendedBalToolsManifest.
+                    from(balToolsManifest, distBalToolsManifest);
+            tool = blendedBalToolsManifest.getActiveTool("luhee");
             Assert.assertTrue(tool.isPresent());
             Assert.assertEquals(tool.get().version(), "1.1.0");
             Assert.assertEquals(tool.get().repository(), "local");
@@ -185,8 +208,10 @@ public class ToolCommandTest extends BaseCommandTest {
             Assert.assertTrue(buildLog.replace("\r", "")
                     .contains("tool 'luhee:1.2.0' successfully removed.\n"));
             balToolsToml = BalToolsToml.from(mockHomeRepo.resolve(".config").resolve("bal-tools.toml"));
-            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml, distBalToolsToml).build();
-            tool = balToolsManifest.getTool("luhee", "1.2.0", "local");
+            balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
+            blendedBalToolsManifest = BlendedBalToolsManifest.
+                    from(balToolsManifest, distBalToolsManifest);
+            tool = blendedBalToolsManifest.getTool("luhee", "1.2.0", "local");
             Assert.assertTrue(tool.isEmpty());
         }
     }

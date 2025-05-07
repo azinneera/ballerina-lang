@@ -22,12 +22,6 @@ import org.ballerinalang.test.context.BallerinaTestException;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeSuite;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.stream.Stream;
-
 /**
  * Parent test class for all integration test cases. This will provide basic functionality for integration tests. This
  * will initialize a single ballerina instance which will be used by all the test cases throughout.
@@ -35,39 +29,14 @@ import java.util.stream.Stream;
 public class BaseTestCase {
 
     public static BalServer balServer;
-    Path tempProjectDirectory;
-    protected static Path singleFileTestsPath;
-    protected static Path projectBasedTestsPath;
 
     @BeforeSuite(alwaysRun = true)
     public void initialize() throws BallerinaTestException {
         balServer = new BalServer(System.getProperty("server.path"));
-//        tempProjectDirectory = Files.createTempDirectory("bal-test-integration-testerina-project-");
-//
-//        Path originalProjTestsDir = Path.of("src/test/resources/project-based-tests").toAbsolutePath();
-//        projectBasedTestsPath = tempProjectDirectory.resolve("project-based-tests");
-//        FileUtils.copyFolder(originalProjTestsDir, projectBasedTestsPath);
     }
 
     @AfterSuite(alwaysRun = true)
     public void destroy() {
         balServer.cleanup();
     }
-
-//    @AfterSuite
-//    public void copyBallerinaExecFiles() {
-//        List<Path> packageDirs;
-//        try (Stream<Path> paths = Files.walk(projectBasedTestsPath, 1)) {
-//            packageDirs = paths.filter(Files::isDirectory).toList();
-//            for (Path dir : packageDirs) {
-//                try {
-//                    FileUtils.copyBallerinaExec(dir, "");
-//                } catch (IOException e) {
-//                    // ignore exception
-//                }
-//            }
-//        } catch (IOException e) {
-//            // ignore exception
-//        }
-//    }
 }

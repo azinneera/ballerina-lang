@@ -88,7 +88,6 @@ import static io.ballerina.cli.cmd.Constants.UPDATE_COMMAND;
 import static io.ballerina.cli.cmd.Constants.VERSION_COMMAND;
 import static io.ballerina.cli.cmd.Constants.VERSION_OPTION;
 import static io.ballerina.cli.cmd.Constants.VERSION_SHORT_OPTION;
-import static io.ballerina.projects.util.ProjectConstants.BALA_DIR_NAME;
 import static io.ballerina.projects.util.ProjectConstants.BAL_TOOLS_TOML;
 import static io.ballerina.projects.util.ProjectConstants.CENTRAL_REPOSITORY_CACHE_NAME;
 import static io.ballerina.projects.util.ProjectConstants.CONFIG_DIR;
@@ -166,7 +165,8 @@ public final class BalToolsUtil {
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
         BalToolsToml distBalToolsToml = BalToolsToml.from(DIST_BAL_TOOLS_TOML_PATH);
         BalToolsManifest distBalToolsManifest = BalToolsManifestBuilder.from(distBalToolsToml).build();
-        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest.from(balToolsManifest, distBalToolsManifest);
+        BlendedBalToolsManifest blendedBalToolsManifest = BlendedBalToolsManifest
+                .from(balToolsManifest, distBalToolsManifest);
         // if built in tool is already added, return
         if (blendedBalToolsManifest.getActiveTool(commandName).isPresent()) {
             return;
@@ -207,7 +207,7 @@ public final class BalToolsUtil {
                         "'. Use 'bal tool search' to select a version compatible with the " +
                         "current Ballerina distribution.";
                 throw LauncherUtils.createLauncherException(errMsg);
-            };
+            }
             Path platformPath = CommandUtil.getPlatformSpecificBalaPath(
                     tool.org(), tool.name(), tool.version(), getRepoPath(tool.repository()));
             File libsDir = platformPath.resolve(Path.of(TOOL, LIBS)).toFile();

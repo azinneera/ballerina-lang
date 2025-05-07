@@ -26,12 +26,12 @@ import io.ballerina.cli.launcher.util.BalToolsUtil;
 import io.ballerina.cli.utils.PrintUtils;
 import io.ballerina.projects.BalToolsManifest;
 import io.ballerina.projects.BalToolsToml;
+import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Settings;
 import io.ballerina.projects.internal.BalToolsManifestBuilder;
-import io.ballerina.projects.BlendedBalToolsManifest;
 import io.ballerina.projects.util.BalToolUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
@@ -612,7 +612,7 @@ public class ToolCommand implements BLauncherCmd {
     }
 
     private void removeSpecificToolVersion() {
-        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.DIST_BAL_TOOLS_TOML_PATH);
+        BalToolsToml balToolsToml = BalToolsToml.from(BalToolsUtil.BAL_TOOLS_TOML_PATH);
         BalToolsManifest balToolsManifest = BalToolsManifestBuilder.from(balToolsToml).build();
 
         Optional<BalToolsManifest.Tool> tool = balToolsManifest.getTool(toolId, version, repositoryName);

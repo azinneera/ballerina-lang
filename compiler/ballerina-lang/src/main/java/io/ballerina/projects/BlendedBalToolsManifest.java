@@ -54,7 +54,8 @@ public class BlendedBalToolsManifest {
         Map<String, Map<String, Map<String, BalToolsManifest.Tool>>> mergedTools =
                 new HashMap<>(localBalToolsManifest.tools());
 
-        for (String toolId : mergedTools.keySet()) {
+        for (Map.Entry<String, Map<String, Map<String, BalToolsManifest.Tool>>> toolEntry : mergedTools.entrySet()) {
+            String toolId = toolEntry.getKey();
             if (BalToolUtils.getInBuiltToolCommands(distBalToolsManifest).contains(toolId)) {
                 continue;
             }
@@ -91,8 +92,8 @@ public class BlendedBalToolsManifest {
         // 2. if there are no compatible versions in the local bal-tools.toml, return the distribution bal-tools.toml
         // 3. if the versions in the local bal-tools.toml are < the versions in the distribution bal-tools.toml, return
         // the distribution bal-tools.toml
-        // 4. if there is a version in the local bal-tools.toml are > the version in the distribution bal-tools.toml, return
-        // the local bal-tools.toml
+        // 4. if there is a version in the local bal-tools.toml > the version in the distribution bal-tools.toml,
+        // return the local bal-tools.toml
         for (String toolCommand : BalToolUtils.getInBuiltToolCommands(distBalToolsManifest)) {
             Optional<BalToolsManifest.Tool> activeToolDist = distBalToolsManifest.getActiveTool(toolCommand);
             if (!mergedTools.containsKey(toolCommand)) {
