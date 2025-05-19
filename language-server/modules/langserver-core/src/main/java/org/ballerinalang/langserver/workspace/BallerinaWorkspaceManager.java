@@ -177,7 +177,7 @@ public class BallerinaWorkspaceManager implements WorkspaceManager {
         // Set the default build options
         this.buildOptions = BuildOptions.builder()
                 .setOffline(CommonUtil.COMPILE_OFFLINE)
-                .setSticky(true)
+                .setUpdatePolicy(UpdatePolicy.HARD)
                 .build();
     }
 

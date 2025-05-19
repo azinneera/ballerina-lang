@@ -19,6 +19,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.environment.UpdatePolicy;
 import io.ballerina.projects.util.ProjectConstants;
 import org.ballerinalang.langserver.command.LSCommandExecutorProvidersHolder;
 import org.ballerinalang.langserver.common.utils.CommonUtil;
@@ -150,7 +151,7 @@ public class BallerinaLanguageServer extends AbstractExtendedLanguageServer
                 workspaceManagerProxy instanceof BallerinaWorkspaceManagerProxyImpl ballerinaWorkspaceManagerProxy) {
             BuildOptions buildOptions = BuildOptions.builder()
                     .setOffline(CommonUtil.COMPILE_OFFLINE)
-                    .setSticky(true)
+                    .setUpdatePolicy(UpdatePolicy.HARD)
                     .setExperimental(true)
                     .build();
             ballerinaWorkspaceManagerProxy.setBuildOptions(buildOptions);
