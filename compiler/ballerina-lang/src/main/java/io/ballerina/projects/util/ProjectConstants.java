@@ -34,6 +34,7 @@ public final class ProjectConstants {
     public static final String PLATFORM = "platform";
     public static final String TOML_EXTENSION = ".toml";
 
+    public static final String BAL_WORKSPACE_TOML = "BalWorkspace.toml";
     public static final String BALLERINA_TOML = "Ballerina.toml";
     public static final String DEPENDENCIES_TOML = "Dependencies.toml";
     public static final String COMPILER_PLUGIN_TOML = "CompilerPlugin.toml";
