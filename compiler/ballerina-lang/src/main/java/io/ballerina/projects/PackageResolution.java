@@ -361,7 +361,8 @@ public class PackageResolution {
 
         // 2) Resolve imports to packages and create the complete dependency graph with package metadata
         ResolutionEngine resolutionEngine = new ResolutionEngine(rootPackageContext.descriptor(),
-                blendedManifest, packageResolver, moduleResolver, resolutionOptions);
+                blendedManifest, packageResolver, moduleResolver, resolutionOptions,
+                rootPackageContext.project().workspace);
         DependencyGraph<DependencyNode> dependencyNodeGraph =
                 resolutionEngine.resolveDependencies(moduleLoadRequests);
         this.dependencyGraphDump = resolutionEngine.dumpGraphs();
@@ -466,7 +467,7 @@ public class PackageResolution {
 
     private ResolutionRequest createFromDepNode(DependencyNode depNode) {
         return ResolutionRequest.from(depNode.pkgDesc(), depNode.scope(), depNode.resolutionType(),
-                resolutionOptions.packageLockingMode());
+                resolutionOptions.packageLockingMode(), depNode.path().orElse(null));
     }
 
     private DependencyGraph<DependencyNode> createDependencyNodeGraph(
@@ -561,9 +562,9 @@ public class PackageResolution {
                                                   ProjectEnvironment projectEnvContext, boolean offline) {
         Map<String, MavenPackageRepository> customPackageRepositoryMap =
                 projectEnvContext.getService(CustomPkgRepositoryContainer.class).getCustomPackageRepositories();
-        return BlendedManifest.from(rootPackageContext.dependencyManifest(),
-                rootPackageContext.packageManifest(),
-                projectEnvContext.getService(LocalPackageRepository.class), customPackageRepositoryMap, offline);
+        return BlendedManifest.from(rootPackageContext.dependencyManifest(), rootPackageContext.packageManifest(),
+                projectEnvContext.getService(LocalPackageRepository.class), customPackageRepositoryMap, offline,
+                rootPackageContext.project());
     }
 
     private ResolutionOptions getResolutionOptions(PackageContext rootPackageContext,

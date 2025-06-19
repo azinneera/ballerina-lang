@@ -1463,7 +1463,7 @@ public class BallerinaWorkspaceManager implements WorkspaceManager {
         try {
             Project project;
             if (projectKind == ProjectKind.BUILD_PROJECT) {
-                project = BuildProject.load(projectRoot, buildOptions);
+                project = ProjectLoader.loadProject(projectRoot, buildOptions);
 
                 // TODO: Remove this once https://github.com/ballerina-platform/ballerina-lang/issues/43972 is resolved
                 // Save the dependencies.toml to resolve the inconsistencies issue in the subsequent builds
@@ -1472,7 +1472,7 @@ public class BallerinaWorkspaceManager implements WorkspaceManager {
                             .setOffline(CommonUtil.COMPILE_OFFLINE)
                             .setSticky(false)
                             .build();
-                    project = BuildProject.load(projectRoot, newOptions);
+                    project = ProjectLoader.loadProject(projectRoot, newOptions);
                 }
             } else if (projectKind == ProjectKind.SINGLE_FILE_PROJECT) {
                 project = SingleFileProject.load(projectRoot, buildOptions);

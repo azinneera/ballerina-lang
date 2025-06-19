@@ -25,6 +25,7 @@ import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
 
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -40,33 +41,36 @@ public final class ResolutionRequest {
 
     // TODO rethink about this
     private final PackageLockingMode packageLockingMode;
+    private final Path path;
 
     private ResolutionRequest(PackageDescriptor packageDescriptor,
                               PackageDependencyScope scope,
                               DependencyResolutionType dependencyResolutionType,
-                              PackageLockingMode packageLockingMode) {
+                              PackageLockingMode packageLockingMode,
+                              Path path) {
         this.packageDesc = packageDescriptor;
         this.scope = scope;
         this.dependencyResolutionType = dependencyResolutionType;
         this.packageLockingMode = packageLockingMode;
+        this.path = path;
     }
 
     public static ResolutionRequest from(PackageDescriptor packageDescriptor) {
         return new ResolutionRequest(packageDescriptor, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE, PackageLockingMode.MEDIUM);
+                DependencyResolutionType.SOURCE, PackageLockingMode.MEDIUM, null);
     }
 
     public static ResolutionRequest from(PackageDescriptor packageDescriptor,
                                          PackageDependencyScope scope) {
         return new ResolutionRequest(packageDescriptor, scope,
-                DependencyResolutionType.SOURCE, PackageLockingMode.MEDIUM);
+                DependencyResolutionType.SOURCE, PackageLockingMode.MEDIUM, null);
     }
 
     public static ResolutionRequest from(PackageDescriptor packageDescriptor,
                                          PackageDependencyScope scope,
                                          DependencyResolutionType resolutionType) {
         return new ResolutionRequest(packageDescriptor, scope,
-                resolutionType, PackageLockingMode.MEDIUM);
+                resolutionType, PackageLockingMode.MEDIUM, null);
     }
 
     public static ResolutionRequest from(PackageDescriptor packageDescriptor,
@@ -75,7 +79,17 @@ public final class ResolutionRequest {
                                          PackageLockingMode packageLockingMode) {
         return new ResolutionRequest(packageDescriptor, scope,
                 dependencyResolutionType,
-                packageLockingMode);
+                packageLockingMode, null);
+    }
+
+    public static ResolutionRequest from(PackageDescriptor packageDescriptor,
+                                         PackageDependencyScope scope,
+                                         DependencyResolutionType dependencyResolutionType,
+                                         PackageLockingMode packageLockingMode,
+                                         Path path) {
+        return new ResolutionRequest(packageDescriptor, scope,
+                dependencyResolutionType,
+                packageLockingMode, path);
     }
 
     public PackageOrg orgName() {
@@ -108,6 +122,10 @@ public final class ResolutionRequest {
 
     public DependencyResolutionType resolutionType() {
         return dependencyResolutionType;
+    }
+
+    public Optional<Path> path() {
+        return Optional.ofNullable(path);
     }
 
     @Override

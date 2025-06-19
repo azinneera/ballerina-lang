@@ -75,7 +75,7 @@ public final class DotGraphUtils {
         PackageDescriptor pkgDesc = Utils.getPkgDescFromNode(name, repo);
         DependencyResolutionType resolutionType = DependencyResolutionType.valueOf(
                 resolutionTypeStr.toUpperCase(Locale.ENGLISH));
-        return new DependencyNode(pkgDesc, scope, resolutionType, error);
+        return new DependencyNode(pkgDesc, scope, resolutionType, error, null);
     }
 
     public static DependencyGraph<PackageDescriptor> createPackageDescGraph(MutableGraph mutableGraph) {

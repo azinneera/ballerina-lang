@@ -274,7 +274,10 @@ public class ManifestBuilder {
         Map<String, PackageManifest.Platform> platforms = getPlatforms(platformNode);
 
         // Process local repo dependencies
-        List<PackageManifest.Dependency> localRepoDependencies = getLocalRepoDependencies();
+        List<PackageManifest.Dependency> dependencies = getLocalRepoDependencies();
+
+        // Process local path dependencies
+        dependencies.addAll(getLocalPathDependencies());
 
         // Process pre build generator tools
         List<PackageManifest.Tool> tools = getTools();
@@ -291,7 +294,7 @@ public class ManifestBuilder {
             balToolDescriptor = BalToolDescriptor.from(this.balToolToml, this.projectPath);
         }
         return PackageManifest.from(packageDescriptor, pluginDescriptor, balToolDescriptor, platforms,
-                localRepoDependencies, otherEntries, diagnostics(), license, authors, keywords, exported, includes,
+                dependencies, otherEntries, diagnostics(), license, authors, keywords, exported, includes,
                 repository, ballerinaVersion, visibility, template, icon, tools, readme, description, moduleEntries);
     }
 
@@ -856,6 +859,30 @@ public class ManifestBuilder {
 
                 dependencies.add(new PackageManifest.Dependency(
                         depName, depOrg, depVersion, repository, dependencyNode.location()));
+            }
+        }
+        return dependencies;
+    }
+
+    private List<PackageManifest.Dependency> getLocalPathDependencies() {
+        TomlTableNode rootNode = ballerinaToml.toml().rootNode();
+        if (rootNode.entries().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        TopLevelNode dependencyEntries = rootNode.entries().get("dependency");
+        if (dependencyEntries == null || dependencyEntries.kind() == TomlType.NONE) {
+            return Collections.emptyList();
+        }
+
+        List<PackageManifest.Dependency> dependencies = new ArrayList<>();
+        if (dependencyEntries.kind() == TomlType.TABLE_ARRAY) {
+            TomlTableArrayNode dependencyTableArray = (TomlTableArrayNode) dependencyEntries;
+            for (TomlTableNode dependencyNode : dependencyTableArray.children()) {
+                String path = getStringValueFromDependencyNode(dependencyNode, PATH);
+                if (path != null) {
+                    dependencies.add(new PackageManifest.Dependency(path, dependencyNode.location()));
+                }
             }
         }
         return dependencies;

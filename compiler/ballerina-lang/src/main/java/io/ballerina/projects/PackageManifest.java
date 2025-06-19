@@ -25,6 +25,8 @@ import io.ballerina.toml.semantic.ast.TomlTableNode;
 import io.ballerina.toml.semantic.diagnostics.TomlNodeLocation;
 import io.ballerina.tools.diagnostics.Location;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -410,6 +412,7 @@ public class PackageManifest {
         private final PackageVersion version;
         private final String repository;
         private final Location location;
+        private final Path path;
 
         public Dependency(PackageName packageName, PackageOrg packageOrg, PackageVersion version) {
             this.packageName = packageName;
@@ -417,6 +420,7 @@ public class PackageManifest {
             this.version = version;
             this.location = null;
             this.repository = null;
+            this.path = null;
         }
 
         public Dependency(PackageName packageName, PackageOrg packageOrg, PackageVersion version,
@@ -426,6 +430,7 @@ public class PackageManifest {
             this.version = version;
             this.repository = repository;
             this.location = null;
+            this.path = null;
         }
 
         public Dependency(PackageName packageName, PackageOrg packageOrg, PackageVersion version,
@@ -435,6 +440,16 @@ public class PackageManifest {
             this.version = version;
             this.repository = repository;
             this.location = location;
+            this.path = null;
+        }
+
+        public Dependency(String path, Location location) {
+            this.packageName = null;
+            this.packageOrg = null;
+            this.version = null;
+            this.repository = null;
+            this.location = location;
+            this.path = Paths.get(path);
         }
 
         public PackageName name() {
@@ -455,6 +470,10 @@ public class PackageManifest {
 
         public Optional<Location> location() {
             return Optional.ofNullable(location);
+        }
+
+        public Optional<Path> path() {
+            return Optional.ofNullable(path);
         }
     }
 

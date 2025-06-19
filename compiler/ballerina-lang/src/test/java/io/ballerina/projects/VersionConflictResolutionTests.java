@@ -74,13 +74,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a newer version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.5.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyNew);
     }
@@ -92,13 +92,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.0.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -110,13 +110,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a newer version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.5.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyNew);
     }
@@ -128,13 +128,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.0.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -146,13 +146,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a newer version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.5.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyNew);
     }
@@ -164,13 +164,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.0.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -182,13 +182,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a newer version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.5.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyNew);
     }
@@ -200,13 +200,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.0.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.TEST_ONLY,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -218,13 +218,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"), ProjectConstants.LOCAL_REPOSITORY_NAME);
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -236,13 +236,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"), ProjectConstants.LOCAL_REPOSITORY_NAME);
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.5.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyNew);
     }
@@ -254,13 +254,13 @@ public class VersionConflictResolutionTests {
         PackageDescriptor dependencyCurrent = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.1.0"), ProjectConstants.LOCAL_REPOSITORY_NAME);
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyCurrent, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         // Now lets add a older version of the dependency
         PackageDescriptor dependencyNew = PackageDescriptor.from(PackageOrg.from("samjs"),
                 PackageName.from("b"), PackageVersion.from("1.0.0"));
         graphBuilder.addUnresolvedDependency(rootPkgDesc, dependencyNew, PackageDependencyScope.DEFAULT,
-                DependencyResolutionType.SOURCE);
+                DependencyResolutionType.SOURCE, null);
 
         assertExpectedPackage(graphBuilder, rootPkgDesc, dependencyCurrent);
     }
@@ -318,7 +318,7 @@ public class VersionConflictResolutionTests {
             for (DependencyJson dependency : directDependency.getDependencies()) {
                 PackageDescriptor pkgDescDependency = getPackageDesc(dependency);
                 depGraphBuilder.addUnresolvedDependency(pkgDesc, pkgDescDependency,
-                        PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE);
+                        PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE, null);
             }
         }
         return depGraphBuilder.buildGraph();
@@ -328,7 +328,7 @@ public class VersionConflictResolutionTests {
                                        PackageDescriptor rootPkgDesc,
                                        PackageDescriptor expectedPkgDesc) {
         DependencyNode rootNode = new DependencyNode(rootPkgDesc,
-                PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE);
+                PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE, null);
         DependencyGraph<DependencyNode> dependencyGraph = graphBuilder.buildGraph();
         Collection<DependencyNode> directDependencies = dependencyGraph.getDirectDependencies(rootNode);
         // There is only one here

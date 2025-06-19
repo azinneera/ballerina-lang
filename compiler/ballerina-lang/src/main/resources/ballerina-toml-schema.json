@@ -412,13 +412,15 @@
           },
           "repository": {
             "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(\\.\\/|\\.\\.\\/|\\/|[a-zA-Z]:\\\\|[a-zA-Z]:\\/)?([^\\s\\/\\\\:*?\"<>|]+[\\/\\\\]?)*$",
+            "message": {
+              "pattern": "invalid 'path' under [[dependency]]"
+            }
           }
         },
-        "required": [
-          "org",
-          "name",
-          "version"
-        ],
         "message": {
           "required": "'${property}' under [[dependency]] is missing"
         }

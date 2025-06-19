@@ -94,7 +94,6 @@ public class JBallerinaBackend extends CompilerBackend {
     private static final String JAR_FILE_NAME_SUFFIX = "";
     private static final HashSet<String> excludeExtensions = new HashSet<>(Lists.of("DSA", "SF"));
     private static final String OS = System.getProperty("os.name").toLowerCase(Locale.getDefault());
-    public static final String JAR_NAME_SEPARATOR = "-";
 
     private final PackageResolution pkgResolution;
     private final JvmTarget jdkVersion;

@@ -71,7 +71,7 @@ import static io.ballerina.projects.util.ProjectUtils.readBuildJson;
  *
  * @since 2.0.0
  */
-public class BuildProject extends Project {
+public class BuildProject extends Project implements Comparable<BuildProject> {
 
     /**
      * Loads a BuildProject from the provided path.
@@ -82,6 +82,18 @@ public class BuildProject extends Project {
     public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath) {
         return load(environmentBuilder, projectPath, BuildOptions.builder().build());
     }
+
+    /**
+     * Loads a BuildProject from the provided path.
+     *
+     * @param projectPath Ballerina project path
+     * @return build project
+     */
+    public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
+                                    Workspace workspace) {
+        return load(environmentBuilder, projectPath, BuildOptions.builder().build(), workspace);
+    }
+
 
     /**
      * Loads a BuildProject from the provided path.
@@ -115,17 +127,31 @@ public class BuildProject extends Project {
      */
     public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
                                     BuildOptions buildOptions) {
+        return load(environmentBuilder, projectPath, buildOptions, null);
+    }
+
+    /**
+     * Loads a BuildProject from provided environment builder, path, build options.
+     *
+     * @param environmentBuilder custom environment builder
+     * @param projectPath Ballerina project path
+     * @param buildOptions build options
+     * @return BuildProject instance
+     */
+    public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
+                                    BuildOptions buildOptions, Workspace workspace) {
         PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(projectPath,
                 buildOptions.disableSyntaxTree());
         BuildOptions mergedBuildOptions = ProjectFiles.createBuildOptions(packageConfig, buildOptions, projectPath);
 
-        BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions);
+        BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions, workspace);
         buildProject.addPackage(packageConfig);
         return buildProject;
     }
 
-    private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions) {
-        super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions);
+    private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions,
+                         Workspace workspace) {
+        super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions, workspace);
         populateCompilerContext();
     }
 
@@ -204,7 +230,7 @@ public class BuildProject extends Project {
     public Project duplicate() {
         BuildOptions duplicateBuildOptions = BuildOptions.builder().build().acceptTheirs(buildOptions());
         BuildProject buildProject = new BuildProject(
-                ProjectEnvironmentBuilder.getDefaultBuilder(), this.sourceRoot, duplicateBuildOptions);
+                ProjectEnvironmentBuilder.getDefaultBuilder(), this.sourceRoot, duplicateBuildOptions, this.workspace);
         return resetPackage(buildProject);
     }
 
@@ -378,6 +404,10 @@ public class BuildProject extends Project {
             Dependency dependency = new Dependency(aPackage.packageOrg().toString(), aPackage.packageName().value(),
                                                    aPackage.packageVersion().toString());
 
+            if (aPackage.project().kind().equals(ProjectKind.BUILD_PROJECT)) {
+                // if the direct dependency is a build project, skip it
+                continue;
+            }
             // get modules of the direct dependency package
             BalaFiles.DependencyGraphResult packageDependencyGraph = BalaFiles
                     .createPackageDependencyGraph(directDependency.packageInstance().project().sourceRoot());
@@ -537,5 +567,10 @@ public class BuildProject extends Project {
             }
         }
         return generatedResourcesPath;
+    }
+
+    @Override
+    public int compareTo(BuildProject other) {
+        return this.sourceRoot.compareTo(other.sourceRoot);
     }
 }

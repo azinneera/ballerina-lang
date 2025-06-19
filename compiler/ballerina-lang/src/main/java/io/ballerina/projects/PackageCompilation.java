@@ -41,10 +41,10 @@ import java.util.function.Function;
 import static org.ballerinalang.compiler.CompilerOptionName.CLOUD;
 import static org.ballerinalang.compiler.CompilerOptionName.DUMP_BIR;
 import static org.ballerinalang.compiler.CompilerOptionName.DUMP_BIR_FILE;
-import static org.ballerinalang.compiler.CompilerOptionName.REMOTE_MANAGEMENT;
 import static org.ballerinalang.compiler.CompilerOptionName.EXPERIMENTAL;
 import static org.ballerinalang.compiler.CompilerOptionName.OBSERVABILITY_INCLUDED;
 import static org.ballerinalang.compiler.CompilerOptionName.OFFLINE;
+import static org.ballerinalang.compiler.CompilerOptionName.REMOTE_MANAGEMENT;
 
 /**
  * Compilation at package level by resolving all the dependencies.

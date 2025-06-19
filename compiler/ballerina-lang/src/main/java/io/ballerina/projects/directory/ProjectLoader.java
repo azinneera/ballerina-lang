@@ -41,7 +41,7 @@ public final class ProjectLoader {
     }
 
     public static Project loadProject(Path path) {
-        return loadProject(path, ProjectEnvironmentBuilder.getDefaultBuilder(), BuildOptions.builder().build());
+        return loadProject(path, BuildOptions.builder().build());
     }
 
     public static Project loadProject(Path path, BuildOptions buildOptions) {
@@ -56,31 +56,28 @@ public final class ProjectLoader {
      * Returns a project by deriving the type from the path provided.
      *
      * @param path path of a .bal file or a .bala file
-     * @return 
+     * @return Project instance
      * @throws ProjectException if an invalid path is provided
      */
     public static Project loadProject(Path path, ProjectEnvironmentBuilder projectEnvironmentBuilder,
                                       BuildOptions buildOptions) throws ProjectException {
         Path absFilePath = Optional.of(path.toAbsolutePath()).get();
         Path projectRoot;
+        Path workspaceRoot;
         if (!Files.exists(path)) {
             throw new ProjectException("provided file path does not exist");
         }
         if (absFilePath.toFile().isDirectory()) {
-            if (ProjectConstants.MODULES_ROOT.equals(
-                    Optional.of(absFilePath.getParent()).get().toFile().getName())) {
-                projectRoot = Optional.of(Optional.of(absFilePath.getParent()).get().getParent()).get();
-            } else if (ProjectConstants.GENERATED_MODULES_ROOT.equals(absFilePath.toFile().getName())) {
-                // Generated default module
-                projectRoot = Optional.of(absFilePath.getParent()).get();
-            } else if (ProjectConstants.GENERATED_MODULES_ROOT.
-                    equals(Optional.of(absFilePath.getParent()).get().toFile().getName())) {
-                // Generated non default module
-                projectRoot = Optional.of(Optional.of(absFilePath.getParent()).get().getParent()).get();
-            } else {
-                projectRoot = absFilePath;
-            }
+            projectRoot = findProjectRoot(absFilePath);
             if (Files.exists(projectRoot.resolve(ProjectConstants.BALLERINA_TOML))) {
+                if (projectRoot.getParent() != null) {
+                    workspaceRoot = projectRoot.getParent();
+                    if (Files.exists(workspaceRoot.resolve(ProjectConstants.BAL_WORKSPACE_TOML))) {
+                        Workspace workspace = Workspace.from(workspaceRoot);
+                        return workspace.projects().stream().filter(project ->
+                                project.sourceRoot().equals(projectRoot)).findAny().orElseThrow();
+                    }
+                }
                 return BuildProject.load(projectEnvironmentBuilder, projectRoot, buildOptions);
             } else if (Files.exists(projectRoot.resolve(ProjectConstants.PACKAGE_JSON))) {
                 projectEnvironmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
@@ -104,10 +101,36 @@ public final class ProjectLoader {
             return SingleFileProject.load(projectEnvironmentBuilder, path, buildOptions);
         }
         try {
+            if (projectRoot.getParent() != null) {
+                workspaceRoot = projectRoot.getParent().resolve(ProjectConstants.BAL_WORKSPACE_TOML);
+                if (Files.exists(workspaceRoot)) {
+                    Workspace workspace = Workspace.from(workspaceRoot);
+                    return workspace.projects().stream().filter(project ->
+                            project.sourceRoot().equals(projectRoot)).findAny().orElseThrow();
+                }
+            }
             return BuildProject.load(projectEnvironmentBuilder, projectRoot, buildOptions);
         } catch (ProjectException e) {
             projectEnvironmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
             return BalaProject.loadProject(projectEnvironmentBuilder, projectRoot);
         }
+    }
+
+    private static Path findProjectRoot(Path absFilePath) {
+        Path projectRoot;
+        if (ProjectConstants.MODULES_ROOT.equals(
+                Optional.of(absFilePath.getParent()).get().toFile().getName())) {
+            projectRoot = Optional.of(Optional.of(absFilePath.getParent()).get().getParent()).get();
+        } else if (ProjectConstants.GENERATED_MODULES_ROOT.equals(absFilePath.toFile().getName())) {
+            // Generated default module
+            projectRoot = Optional.of(absFilePath.getParent()).get();
+        } else if (ProjectConstants.GENERATED_MODULES_ROOT.
+                equals(Optional.of(absFilePath.getParent()).get().toFile().getName())) {
+            // Generated non default module
+            projectRoot = Optional.of(Optional.of(absFilePath.getParent()).get().getParent()).get();
+        } else {
+            projectRoot = absFilePath;
+        }
+        return projectRoot;
     }
 }

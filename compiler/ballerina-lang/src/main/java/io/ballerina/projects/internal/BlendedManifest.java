@@ -24,7 +24,9 @@ import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
+import io.ballerina.projects.Project;
 import io.ballerina.projects.SemanticVersion.VersionCompatibilityResult;
+import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.internal.repositories.AbstractPackageRepository;
 import io.ballerina.projects.internal.repositories.MavenPackageRepository;
 import io.ballerina.projects.util.ProjectConstants;
@@ -33,6 +35,8 @@ import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.DiagnosticInfo;
 import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -64,23 +68,29 @@ public class BlendedManifest {
                                        PackageManifest packageManifest,
                                        AbstractPackageRepository localPackageRepository,
                                        Map<String, MavenPackageRepository> mavenPackageRepositoryMap,
-                                       boolean offline) {
+                                       boolean offline, Project project) {
         List<Diagnostic> diagnostics = new ArrayList<>();
         PackageContainer<Dependency> depContainer = new PackageContainer<>();
+        PackageOrg pkgOrg;
+        PackageName pkgName;
+        PackageVersion pkgVersion;
+        Path dependencyPath = null;
         for (DependencyManifest.Package pkgInDepManifest : dependencyManifest.packages()) {
-            PackageOrg pkgOrg = pkgInDepManifest.org();
-            PackageName pkgName = pkgInDepManifest.name();
-            PackageVersion pkgVersion = ProjectUtils.isBuiltInPackage(pkgOrg, pkgName.toString()) ?
+            pkgOrg = pkgInDepManifest.org();
+            pkgName = pkgInDepManifest.name();
+            pkgVersion = ProjectUtils.isBuiltInPackage(pkgOrg, pkgName.toString()) ?
                     BUILTIN_PACKAGE_VERSION : pkgInDepManifest.version();
             depContainer.add(pkgOrg, pkgName, new Dependency(pkgOrg, pkgName, pkgVersion,
                     getRelation(pkgInDepManifest.isTransitive()),
-                    REPOSITORY_NOT_SPECIFIED, moduleNames(pkgInDepManifest), DependencyOrigin.LOCKED));
+                    REPOSITORY_NOT_SPECIFIED, moduleNames(pkgInDepManifest), DependencyOrigin.LOCKED, null));
         }
 
         for (PackageManifest.Dependency depInPkgManifest : packageManifest.dependencies()) {
+            pkgOrg = depInPkgManifest.org();
+            pkgName = depInPkgManifest.name();
+            pkgVersion = depInPkgManifest.version();
             AbstractPackageRepository targetRepository = localPackageRepository;
-            Optional<Dependency> existingDepOptional = depContainer.get(
-                    depInPkgManifest.org(), depInPkgManifest.name());
+            Optional<Dependency> existingDepOptional = depContainer.get(pkgOrg, pkgName);
             Repository depInPkgManifestRepo = depInPkgManifest.repository() != null &&
                     depInPkgManifest.repository().equals(ProjectConstants.LOCAL_REPOSITORY_NAME) ?
                     REPOSITORY_LOCAL : new Repository(depInPkgManifest.repository());
@@ -99,15 +109,12 @@ public class BlendedManifest {
                     continue;
                 }
 
-
                 if (depInPkgManifest.repository().equals(ProjectConstants.LOCAL_REPOSITORY_NAME) &&
-                        !localPackageRepository.isPackageExists(depInPkgManifest.org(), depInPkgManifest.name(),
-                        depInPkgManifest.version())) {
+                        !localPackageRepository.isPackageExists(pkgOrg, pkgName, pkgVersion)) {
                     var diagnosticInfo = new DiagnosticInfo(
                             ProjectDiagnosticErrorCode.PACKAGE_NOT_FOUND.diagnosticId(),
-                            "Dependency version (" + depInPkgManifest.version() +
-                                    ") cannot be found in the local repository. " +
-                                    "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name() + "",
+                            "Dependency version (" + pkgVersion +
+                                    ") cannot be found in the local repository. org: `" + pkgOrg + "` name: " + pkgName,
                             DiagnosticSeverity.WARNING);
                     PackageDiagnostic diagnostic = new PackageDiagnostic(
                             diagnosticInfo, depInPkgManifest.location().orElseThrow());
@@ -117,14 +124,13 @@ public class BlendedManifest {
 
                 if (!depInPkgManifest.repository().equals(ProjectConstants.LOCAL_REPOSITORY_NAME)) {
                     targetRepository = mavenPackageRepositoryMap.get(depInPkgManifest.repository());
-                    if (!((MavenPackageRepository) targetRepository).isPackageExists(depInPkgManifest.org(),
-                            depInPkgManifest.name(), depInPkgManifest.version(), offline)) {
+                    if (!((MavenPackageRepository) targetRepository).isPackageExists(pkgOrg,
+                            pkgName, pkgVersion, offline)) {
                         var diagnosticInfo = new DiagnosticInfo(
                                 ProjectDiagnosticErrorCode.PACKAGE_NOT_FOUND.diagnosticId(),
                                 "Dependency version (" + depInPkgManifest.version() +
                                         ") cannot be found in the custom repository (" +
-                                        depInPkgManifest.repository() + "). " +
-                                        "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name() + "",
+                                        depInPkgManifest.repository() + "). org: `" + pkgOrg + "` name: " + pkgName,
                                 DiagnosticSeverity.WARNING);
                         PackageDiagnostic diagnostic = new PackageDiagnostic(
                                 diagnosticInfo, depInPkgManifest.location().orElseThrow());
@@ -133,50 +139,90 @@ public class BlendedManifest {
                     }
                 }
             } else {
+                if (project != null && project.workspace().isPresent()) {
+                    if (depInPkgManifest.path().isPresent()) {
+                        if (!depInPkgManifest.path().get().isAbsolute()) {
+                            dependencyPath = project.sourceRoot().resolve(depInPkgManifest.path().get())
+                                    .toAbsolutePath().normalize();
+                        }
+                        if (dependencyPath != null && !Files.exists(dependencyPath)) {
+                            var diagnosticInfo = new DiagnosticInfo(
+                                    ProjectDiagnosticErrorCode.PACKAGE_NOT_FOUND.diagnosticId(),
+                                    "Dependency path cannot be found: " + depInPkgManifest.path().get(),
+                                    DiagnosticSeverity.WARNING);
+                            PackageDiagnostic diagnostic = new PackageDiagnostic(
+                                    diagnosticInfo, depInPkgManifest.location().orElseThrow());
+                            diagnostics.add(diagnostic);
+                            continue;
+                        }
+                        for (BuildProject buildProject : project.workspace().get().projects()) {
+                            if (buildProject.sourceRoot().equals(dependencyPath)) {
+                                pkgOrg = buildProject.currentPackage().packageOrg();
+                                pkgName = buildProject.currentPackage().packageName();
+                                pkgVersion = buildProject.currentPackage().packageVersion();
+                                if (!Files.exists(buildProject.targetDir().resolve(ProjectConstants.CACHES_DIR_NAME))) {
+                                    var diagnosticInfo = new DiagnosticInfo(
+                                            ProjectDiagnosticErrorCode.PACKAGE_NOT_FOUND.diagnosticId(),
+                                            "Dependency package is not built yet. org: `" + pkgOrg +
+                                                    "` name: " + pkgName, DiagnosticSeverity.WARNING);
+                                    PackageDiagnostic diagnostic = new PackageDiagnostic(
+                                            diagnosticInfo, depInPkgManifest.location().orElseThrow());
+                                    diagnostics.add(diagnostic);
+                                    break;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 Collection<String> moduleNames = existingDepOptional.isPresent() ?
                         existingDepOptional.get().modules : Collections.emptyList();
-                depContainer.add(depInPkgManifest.org(), depInPkgManifest.name(), new Dependency(
-                        depInPkgManifest.org(), depInPkgManifest.name(), depInPkgManifest.version(),
-                        DependencyRelation.UNKNOWN, REPOSITORY_NOT_SPECIFIED,
-                        moduleNames, DependencyOrigin.USER_SPECIFIED));
+                depContainer.add(pkgOrg, pkgName, new Dependency(pkgOrg, pkgName, pkgVersion,
+                        DependencyRelation.UNKNOWN, REPOSITORY_NOT_SPECIFIED, moduleNames,
+                        DependencyOrigin.USER_SPECIFIED, dependencyPath));
                 continue;
             }
 
             if (existingDepOptional.isEmpty()) {
-                depContainer.add(depInPkgManifest.org(), depInPkgManifest.name(),
-                        new Dependency(depInPkgManifest.org(),
-                                depInPkgManifest.name(), depInPkgManifest.version(), DependencyRelation.UNKNOWN,
-                                depInPkgManifestRepo, moduleNames(depInPkgManifest, targetRepository),
-                                DependencyOrigin.USER_SPECIFIED));
+                depContainer.add(pkgOrg, pkgName, new Dependency(pkgOrg, pkgName, pkgVersion,
+                                DependencyRelation.UNKNOWN, depInPkgManifestRepo,
+                                moduleNames(depInPkgManifest, targetRepository), DependencyOrigin.USER_SPECIFIED,
+                                dependencyPath));
             } else {
                 Dependency existingDep = existingDepOptional.get();
                 VersionCompatibilityResult compatibilityResult =
                         depInPkgManifest.version().compareTo(existingDep.version());
                 if (compatibilityResult == VersionCompatibilityResult.EQUAL ||
                         compatibilityResult == VersionCompatibilityResult.GREATER_THAN) {
-                    Dependency newDep = new Dependency(depInPkgManifest.org(), depInPkgManifest.name(),
-                            depInPkgManifest.version(), DependencyRelation.UNKNOWN, depInPkgManifestRepo,
-                            moduleNames(depInPkgManifest, targetRepository), DependencyOrigin.USER_SPECIFIED);
-                    depContainer.add(depInPkgManifest.org(), depInPkgManifest.name(), newDep);
+                    Dependency newDep = new Dependency(pkgOrg, pkgName, pkgVersion,
+                            DependencyRelation.UNKNOWN, depInPkgManifestRepo,
+                            moduleNames(depInPkgManifest, targetRepository), DependencyOrigin.USER_SPECIFIED,
+                            dependencyPath);
+                    depContainer.add(pkgOrg, pkgName, newDep);
                 } else if (compatibilityResult == VersionCompatibilityResult.INCOMPATIBLE) {
                     DiagnosticInfo diagnosticInfo = new DiagnosticInfo(
                             ProjectDiagnosticErrorCode.INCOMPATIBLE_DEPENDENCY_VERSIONS.diagnosticId(),
                             "Dependency version (" + depInPkgManifest.version() + ") " +
                                     "is incompatible with the version locked in Dependencies.toml ("
                                     + existingDep.version + "). " +
-                                    "org: `" + existingDep.org() + "` name: " + existingDep.name() + "",
-                            DiagnosticSeverity.ERROR);
+                                    "org: `" + pkgOrg + "` name: " + pkgName, DiagnosticSeverity.ERROR);
                     PackageDiagnostic diagnostic = new PackageDiagnostic(
                             diagnosticInfo, depInPkgManifest.location().orElseThrow());
                     diagnostics.add(diagnostic);
-                    Dependency newDep = new Dependency(existingDep.org(), existingDep.name(),
-                            existingDep.version(), existingDep.relation, existingDep.repository,
-                            existingDep.modules, existingDep.origin, true);
+                    Repository repository;
+                    if (dependencyPath != null) {
+                        repository = new Repository(dependencyPath.toString());
+                    } else {
+                        repository = existingDep.repository;
+                    }
+                    Dependency newDep = new Dependency(pkgOrg, pkgName, existingDep.version(), existingDep.relation,
+                            repository, existingDep.modules, existingDep.origin,
+                            dependencyPath, true);
                     depContainer.add(depInPkgManifest.org(), depInPkgManifest.name(), newDep);
                 }
             }
         }
-
         return new BlendedManifest(depContainer, new DefaultDiagnosticResult(diagnostics));
     }
 
@@ -257,6 +303,7 @@ public class BlendedManifest {
         private final Collection<String> modules;
         private final DependencyOrigin origin;
         private final boolean isError;
+        private final Path path;
 
 
         private Dependency(PackageOrg org,
@@ -264,7 +311,9 @@ public class BlendedManifest {
                            PackageVersion version,
                            DependencyRelation relation,
                            Repository repository,
-                           Collection<String> modules, DependencyOrigin origin) {
+                           Collection<String> modules,
+                           DependencyOrigin origin,
+                           Path path) {
             this.org = org;
             this.name = name;
             this.version = version;
@@ -273,6 +322,7 @@ public class BlendedManifest {
             this.modules = modules;
             this.origin = origin;
             this.isError = false;
+            this.path = path;
         }
 
         private Dependency(PackageOrg org,
@@ -282,6 +332,7 @@ public class BlendedManifest {
                            Repository repository,
                            Collection<String> modules,
                            DependencyOrigin origin,
+                           Path path,
                            boolean isError) {
             this.org = org;
             this.name = name;
@@ -291,6 +342,7 @@ public class BlendedManifest {
             this.modules = modules;
             this.origin = origin;
             this.isError = isError;
+            this.path = path;
         }
 
         public PackageName name() {
@@ -332,6 +384,10 @@ public class BlendedManifest {
 
         public boolean isError() {
             return isError;
+        }
+
+        public Optional<Path> path() {
+            return Optional.ofNullable(path);
         }
     }
 

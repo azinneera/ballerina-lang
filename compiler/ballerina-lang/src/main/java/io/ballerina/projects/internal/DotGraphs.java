@@ -264,6 +264,6 @@ public final class DotGraphs {
 
     private static DependencyNode toDependencyNode(ResolvedPackageDependency resPkgDep) {
         return new DependencyNode(resPkgDep.packageInstance().descriptor(),
-                resPkgDep.scope(), resPkgDep.dependencyResolvedType());
+                resPkgDep.scope(), resPkgDep.dependencyResolvedType(), null);
     }
 }

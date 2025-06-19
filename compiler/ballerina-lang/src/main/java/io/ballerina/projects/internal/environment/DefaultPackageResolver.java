@@ -59,6 +59,7 @@ public class DefaultPackageResolver implements PackageResolver {
     private final PackageRepository localRepo;
     private final Map<String, PackageRepository> customRepos;
     private final WritablePackageCache packageCache;
+    private final PackageRepository workspaceRepo;
 
     public DefaultPackageResolver(PackageRepository distributionRepo,
                                   PackageRepository centralRepo,
@@ -68,6 +69,7 @@ public class DefaultPackageResolver implements PackageResolver {
         this.centralRepo = centralRepo;
         this.localRepo = localRepo;
         this.customRepos = new HashMap<>();
+        this.workspaceRepo = null;
         this.packageCache = (WritablePackageCache) packageCache;
     }
 
@@ -80,6 +82,21 @@ public class DefaultPackageResolver implements PackageResolver {
         this.centralRepo = centralRepo;
         this.customRepos = customRepos;
         this.localRepo = localRepo;
+        this.workspaceRepo = null;
+        this.packageCache = (WritablePackageCache) packageCache;
+    }
+
+    public DefaultPackageResolver(PackageRepository distributionRepo,
+                                  PackageRepository centralRepo,
+                                  PackageRepository localRepo,
+                                  Map<String, PackageRepository> customRepos,
+                                  PackageRepository workspaceRepo,
+                                  PackageCache packageCache) {
+        this.distributionRepo = distributionRepo;
+        this.centralRepo = centralRepo;
+        this.customRepos = customRepos;
+        this.localRepo = localRepo;
+        this.workspaceRepo = workspaceRepo;
         this.packageCache = (WritablePackageCache) packageCache;
     }
 
@@ -126,20 +143,28 @@ public class DefaultPackageResolver implements PackageResolver {
     public Collection<PackageMetadataResponse> resolvePackageMetadata(Collection<ResolutionRequest> requests,
                                                                       ResolutionOptions options) {
         Collection<ResolutionRequest> localRepoRequests = new ArrayList<>();
-        Map<PackageRepository, ArrayList<ResolutionRequest>> customRepoRequestMap = new HashMap<>();
+        Collection<ResolutionRequest> workspaceRequests = new ArrayList<>();
+        Map<PackageRepository, List<ResolutionRequest>> customRepoRequestMap = new HashMap<>();
         for (ResolutionRequest request : requests) {
+            if (request.path().isPresent()) {
+                workspaceRequests.add(request);
+                continue;
+            }
             Optional<String> repository = request.packageDescriptor().repository();
-            if (repository.isPresent() && repository.get().equals(ProjectConstants.LOCAL_REPOSITORY_NAME)) {
-                localRepoRequests.add(request);
-            } else if (repository.isPresent() && customRepos.containsKey(repository.get())) {
-                PackageRepository customRepository = customRepos.get(repository.get());
-
-                if (customRepoRequestMap.containsKey(customRepository)) {
-                    customRepoRequestMap.get(customRepository).add(request);
-                } else {
-                    ArrayList<ResolutionRequest> requestList = new ArrayList<>();
-                    requestList.add(request);
-                    customRepoRequestMap.put(customRepository, requestList);
+            if (repository.isPresent()) {
+                if (repository.get().equals(ProjectConstants.LOCAL_REPOSITORY_NAME)) {
+                    localRepoRequests.add(request);
+                    continue;
+                }
+                if (customRepos.containsKey(repository.get())) {
+                    PackageRepository customRepository = customRepos.get(repository.get());
+                    if (customRepoRequestMap.containsKey(customRepository)) {
+                        customRepoRequestMap.get(customRepository).add(request);
+                    } else {
+                        ArrayList<ResolutionRequest> requestList = new ArrayList<>();
+                        requestList.add(request);
+                        customRepoRequestMap.put(customRepository, requestList);
+                    }
                 }
             }
         }
@@ -148,11 +173,15 @@ public class DefaultPackageResolver implements PackageResolver {
                 Collections.emptyList() :
                 localRepo.getPackageMetadata(localRepoRequests, options);
 
+
+        Collection<PackageMetadataResponse> workspacePackages = (workspaceRequests.isEmpty() || workspaceRepo == null) ?
+                Collections.emptyList() : workspaceRepo.getPackageMetadata(workspaceRequests, options);
+
         Collection<PackageMetadataResponse> allCustomRepoPackages = new ArrayList<>();
-        for (Map.Entry<PackageRepository, ArrayList<ResolutionRequest>> customRepoRequestEntry :
+        for (Map.Entry<PackageRepository, List<ResolutionRequest>> customRepoRequestEntry :
                 customRepoRequestMap.entrySet()) {
             PackageRepository customRepository = customRepoRequestEntry.getKey();
-            ArrayList<ResolutionRequest> customRepoRequests = customRepoRequestEntry.getValue();
+            List<ResolutionRequest> customRepoRequests = customRepoRequestEntry.getValue();
             Collection<PackageMetadataResponse> customRepoPackages = customRepoRequests.isEmpty() ?
                     Collections.emptyList() : customRepository.getPackageMetadata(customRepoRequests, options);
             allCustomRepoPackages.addAll(customRepoPackages);
@@ -162,7 +191,7 @@ public class DefaultPackageResolver implements PackageResolver {
         Collection<PackageMetadataResponse> latestVersionsInDist =
                 distributionRepo.getPackageMetadata(requests, options);
 
-        // Send non built in packages to central
+        // Send non-builtin packages to central
         Collection<ResolutionRequest> centralLoadRequests = requests.stream()
                 .filter(r -> !r.packageDescriptor().isBuiltInPackage())
                 .toList();
@@ -173,11 +202,12 @@ public class DefaultPackageResolver implements PackageResolver {
         List<PackageMetadataResponse> responseDescriptors = new ArrayList<>(
                 // Since packages can be resolved from multiple repos
                 // the repos should be provided to the stream in the order of priority.
-                Stream.of(localRepoPackages, allCustomRepoPackages, latestVersionsInDist, latestVersionsInCentral)
+                Stream.of(localRepoPackages, workspacePackages, allCustomRepoPackages, latestVersionsInDist,
+                                latestVersionsInCentral)
                         .flatMap(Collection::stream).collect(Collectors.toMap(
                         PackageMetadataResponse::packageLoadRequest, Function.identity(),
                         (PackageMetadataResponse x, PackageMetadataResponse y) -> {
-                            // There will be 2 iterations (number of repos-1) and the returned
+                            // There will be 3 iterations (number of repos-1) and the returned
                             // value of the first iteration will be the 'x' for the next iteration.
                             if (y.resolutionStatus().equals(ResolutionStatus.UNRESOLVED)) {
                                 return x;
@@ -236,6 +266,13 @@ public class DefaultPackageResolver implements PackageResolver {
         // 1) Try to load from the distribution repo, if the requested package is a built-in package.
         if (pkgDesc.isBuiltInPackage()) {
             return distributionRepo.getPackage(resolutionReq, options);
+        }
+
+        if (resolutionReq.path().isPresent()) {
+            if (workspaceRepo == null) {
+                throw new IllegalStateException("Workspace repository is not set for the project environment.");
+            }
+            return workspaceRepo.getPackage(resolutionReq, options);
         }
 
         // 2) Try to load from the local repo, if it is requested from the local repo.

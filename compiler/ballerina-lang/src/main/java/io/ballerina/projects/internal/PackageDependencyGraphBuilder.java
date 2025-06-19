@@ -33,6 +33,7 @@ import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.DiagnosticInfo;
 import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -71,7 +72,7 @@ public class PackageDependencyGraphBuilder {
         diagnosticList = new ArrayList<>();
         this.rootNodeVertex = new Vertex(rootNode.org(), rootNode.name());
         this.rootDepNode = new DependencyNode(rootNode,
-                PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE);
+                PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE, null);
         this.resolutionOptions = resolutionOptions;
         this.rawGraphBuilder = DependencyGraphBuilder.getBuilder(rootDepNode);
 
@@ -85,7 +86,7 @@ public class PackageDependencyGraphBuilder {
         // Add the correct version of the dependent to the graph.
         Vertex dependentVertex = new Vertex(node.org(), node.name());
         return addNewVertex(dependentVertex,
-                new DependencyNode(node, scope, dependencyResolvedType), true);
+                new DependencyNode(node, scope, dependencyResolvedType, null), true);
     }
 
     public NodeStatus addResolvedNode(PackageDescriptor node,
@@ -94,7 +95,7 @@ public class PackageDependencyGraphBuilder {
         // Add the correct version of the dependent to the graph.
         Vertex dependentVertex = new Vertex(node.org(), node.name());
         return addNewVertex(dependentVertex,
-                new DependencyNode(node, scope, dependencyResolvedType), false);
+                new DependencyNode(node, scope, dependencyResolvedType, null), false);
     }
 
     public NodeStatus addErrorNode(PackageDescriptor node,
@@ -103,15 +104,16 @@ public class PackageDependencyGraphBuilder {
         // Add the correct version of the dependent to the graph.
         Vertex dependentVertex = new Vertex(node.org(), node.name());
         return addNewVertex(dependentVertex,
-                new DependencyNode(node, scope, dependencyResolvedType, true), false);
+                new DependencyNode(node, scope, dependencyResolvedType, true, null), false);
     }
 
     public NodeStatus addUnresolvedDependency(PackageDescriptor dependent,
                                               PackageDescriptor dependency,
                                               PackageDependencyScope dependencyScope,
-                                              DependencyResolutionType dependencyResolvedType) {
+                                              DependencyResolutionType dependencyResolvedType,
+                                              Path dependencyPath) {
         return addDependencyInternal(dependent,
-                new DependencyNode(dependency, dependencyScope, dependencyResolvedType),
+                new DependencyNode(dependency, dependencyScope, dependencyResolvedType, dependencyPath),
                 true);
     }
 
@@ -120,16 +122,17 @@ public class PackageDependencyGraphBuilder {
                                               PackageDependencyScope dependencyScope,
                                               DependencyResolutionType dependencyResolvedType) {
         return addDependencyInternal(dependent,
-                new DependencyNode(dependency, dependencyScope, dependencyResolvedType, true),
+                new DependencyNode(dependency, dependencyScope, dependencyResolvedType, true, null),
                 false);
     }
 
     public NodeStatus addResolvedDependency(PackageDescriptor dependent,
                                             PackageDescriptor dependency,
                                             PackageDependencyScope dependencyScope,
-                                            DependencyResolutionType dependencyResolvedType) {
+                                            DependencyResolutionType dependencyResolvedType,
+                                            Path dependencyPath) {
         return addDependencyInternal(dependent,
-                new DependencyNode(dependency, dependencyScope, dependencyResolvedType),
+                new DependencyNode(dependency, dependencyScope, dependencyResolvedType, dependencyPath),
                 false);
     }
 
@@ -292,7 +295,7 @@ public class PackageDependencyGraphBuilder {
                         existingPkgDep.pkgDesc(),
                         existingPkgDep.scope(),
                         existingPkgDep.resolutionType(),
-                        true);
+                        true, null);
                 nodeStatus = NodeStatus.ACCEPTED;
             } else {
                 // If the existing dependency scope is DEFAULT, use it. Otherwise use the new dependency scope.
@@ -307,7 +310,7 @@ public class PackageDependencyGraphBuilder {
                                 DependencyResolutionType.SOURCE :
                                 newPkgDep.resolutionType();
 
-                resolvedPkgDep = new DependencyNode(resolvedPkgDesc, depScope, resolutionType);
+                resolvedPkgDep = new DependencyNode(resolvedPkgDesc, depScope, resolutionType, null);
                 nodeStatus = getNodeStatus(vertex, existingPkgDep, newPkgDep, unresolved);
             }
         }
@@ -330,7 +333,7 @@ public class PackageDependencyGraphBuilder {
                 for (Vertex depVertex : depGraph.get(vertex)) {
                     DependencyNode dependencyNode = vertices.get(depVertex);
                     DependencyNode newDependencyNode = new DependencyNode(dependencyNode.pkgDesc(),
-                            resolvedPkgDep.scope(), dependencyNode.resolutionType());
+                            resolvedPkgDep.scope(), dependencyNode.resolutionType(), null);
                     vertices.put(depVertex, newDependencyNode);
                     if (resolutionOptions.dumpRawGraphs()) {
                         rawGraphBuilder.addDependency(resolvedPkgDep, newDependencyNode);

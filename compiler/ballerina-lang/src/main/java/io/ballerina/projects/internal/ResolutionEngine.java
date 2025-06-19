@@ -24,6 +24,7 @@ import io.ballerina.projects.PackageDependencyScope;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.SemanticVersion.VersionCompatibilityResult;
+import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.environment.ModuleLoadRequest;
 import io.ballerina.projects.environment.PackageLockingMode;
 import io.ballerina.projects.environment.PackageMetadataResponse;
@@ -37,6 +38,7 @@ import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.DiagnosticInfo;
 import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -62,6 +64,7 @@ public class ResolutionEngine {
     private String dependencyGraphDump;
     private DiagnosticResult diagnosticResult;
     private Set<DependencyNode> unresolvedDeps = null;
+    private Workspace workspace;
 
     public ResolutionEngine(PackageDescriptor rootPkgDesc,
                             BlendedManifest blendedManifest,
@@ -77,6 +80,25 @@ public class ResolutionEngine {
         this.graphBuilder = new PackageDependencyGraphBuilder(rootPkgDesc, resolutionOptions);
         this.diagnostics = new ArrayList<>();
         this.dependencyGraphDump = "";
+        this.workspace = null;
+    }
+
+    public ResolutionEngine(PackageDescriptor rootPkgDesc,
+                            BlendedManifest blendedManifest,
+                            PackageResolver packageResolver,
+                            ModuleResolver moduleResolver,
+                            ResolutionOptions resolutionOptions,
+                            Workspace workspace) {
+        this.rootPkgDesc = rootPkgDesc;
+        this.blendedManifest = blendedManifest;
+        this.packageResolver = packageResolver;
+        this.moduleResolver = moduleResolver;
+        this.resolutionOptions = resolutionOptions;
+
+        this.graphBuilder = new PackageDependencyGraphBuilder(rootPkgDesc, resolutionOptions);
+        this.diagnostics = new ArrayList<>();
+        this.dependencyGraphDump = "";
+        this.workspace = workspace;
     }
 
     public DiagnosticResult diagnosticResult() {
@@ -119,6 +141,7 @@ public class ResolutionEngine {
             PackageVersion depVersion;
             String repository;
             boolean errorNode = false;
+            Path path;
             PackageDescriptor depPkgDesc = directPkgDependency.pkgDesc();
             if (directPkgDependency.dependencyKind() == ModuleResolver.DirectPackageDependencyKind.NEW) {
                 // This blendedDep may be resolved from the local repository as well.
@@ -142,19 +165,23 @@ public class ResolutionEngine {
                     depVersion = null;
                     repository = null;
                 }
+                path = blendedDepOptional.flatMap(BlendedManifest.Dependency::path)
+                        .orElse(null);
             } else if (directPkgDependency.dependencyKind() == ModuleResolver.DirectPackageDependencyKind.EXISTING) {
                 BlendedManifest.Dependency blendedDep = blendedManifest.dependencyOrThrow(
                         depPkgDesc.org(), depPkgDesc.name());
                 depVersion = blendedDep.version();
                 repository = blendedDep.repository();
                 errorNode = blendedDep.isError();
+                path = blendedDep.path().orElse(null);
             } else {
                 throw new IllegalStateException("Unsupported direct dependency kind: " +
                         directPkgDependency.dependencyKind());
             }
+
             directDeps.add(new ResolutionEngine.DependencyNode(
                     PackageDescriptor.from(depPkgDesc.org(), depPkgDesc.name(), depVersion, repository),
-                    directPkgDependency.scope(), directPkgDependency.resolutionType(), errorNode));
+                    directPkgDependency.scope(), directPkgDependency.resolutionType(), errorNode, path));
         }
 
         return directDeps;
@@ -180,7 +207,7 @@ public class ResolutionEngine {
                     DependencyNode dependencyNode = new DependencyNode(
                             resolutionRequest.packageDescriptor(),
                             resolutionRequest.scope(),
-                            resolutionRequest.resolutionType());
+                            resolutionRequest.resolutionType(), resolutionRequest.path().orElse(null));
                     unresolvedDeps.add(dependencyNode);
                     graphBuilder.addUnresolvedDirectDepToRawGraph(dependencyNode);
                 }
@@ -190,18 +217,19 @@ public class ResolutionEngine {
             PackageDescriptor resolvedPkgDesc = resolutionResp.resolvedDescriptor();
             DependencyResolutionType resolutionType = resolutionReq.resolutionType();
             PackageDependencyScope scope = resolutionReq.scope();
+            Path depPath = resolutionReq.path().orElse(null);
 
             // Merge the dependency graph only if the node is accepted by the graphBuilder
             NodeStatus nodeStatus = graphBuilder.addResolvedDependency(rootPkgDesc,
-                    resolvedPkgDesc, scope, resolutionType);
+                    resolvedPkgDesc, scope, resolutionType, depPath);
             if (nodeStatus == NodeStatus.ACCEPTED) {
                 mergeGraph(resolvedPkgDesc,
                         resolutionResp.dependencyGraph().orElseThrow(
                                 () -> new IllegalStateException("Graph cannot be null in the resolved dependency: " +
                                         resolvedPkgDesc.toString())),
-                        scope, resolutionType);
+                        scope, resolutionType, depPath);
             }
-            resolvedDeps.add(new DependencyNode(resolvedPkgDesc, scope, resolutionType));
+            resolvedDeps.add(new DependencyNode(resolvedPkgDesc, scope, resolutionType, depPath));
         }
         if (resolutionOptions.dumpRawGraphs() || resolutionOptions.dumpGraph()) {
             HashSet<DependencyNode> unresolvedNodes = new HashSet<>(graphBuilder.getAllDependencies());
@@ -240,8 +268,15 @@ public class ResolutionEngine {
                     lockingMode = PackageLockingMode.HARD;
                 }
             }
+
+            Path dependencyRepoPath = null;
+            if (directDependency.path().isPresent()) {
+                dependencyRepoPath = workspace.projects().stream().filter(project ->
+                        project.sourceRoot().equals(directDependency.path().orElseThrow()))
+                        .findFirst().orElseThrow().targetDir();
+            }
             resolutionRequests.add(ResolutionRequest.from(pkgDesc, directDependency.scope(),
-                    directDependency.resolutionType(), lockingMode));
+                    directDependency.resolutionType(), lockingMode, dependencyRepoPath));
         }
 
         return packageResolver.resolvePackageMetadata(resolutionRequests, resolutionOptions);
@@ -250,7 +285,7 @@ public class ResolutionEngine {
     private void mergeGraph(PackageDescriptor rootNode,
                             DependencyGraph<PackageDescriptor> dependencyGraph,
                             PackageDependencyScope scope,
-                            DependencyResolutionType resolutionType) {
+                            DependencyResolutionType resolutionType, Path depPath) {
         Collection<PackageDescriptor> directDependencies = dependencyGraph.getDirectDependencies(rootNode);
         for (PackageDescriptor directDep : directDependencies) {
             NodeStatus nodeStatus;
@@ -261,15 +296,15 @@ public class ResolutionEngine {
                 // we need to always get the dependency graph of built-in packages from the current distribution
                 dependencyGraphFinal = getBuiltInPkgDescDepGraph(scope, directDep);
                 // Builtin package versions are always resolved
-                nodeStatus = graphBuilder.addResolvedDependency(rootNode, directDep, scope, resolutionType);
+                nodeStatus = graphBuilder.addResolvedDependency(rootNode, directDep, scope, resolutionType, depPath);
             } else {
                 dependencyGraphFinal = dependencyGraph;
-                nodeStatus = graphBuilder.addUnresolvedDependency(rootNode, directDep, scope, resolutionType);
+                nodeStatus = graphBuilder.addUnresolvedDependency(rootNode, directDep, scope, resolutionType, depPath);
             }
 
             // Merge the dependency graph only if the node is accepted by the graphBuilder
             if (nodeStatus == NodeStatus.ACCEPTED) {
-                mergeGraph(directDep, dependencyGraphFinal, scope, resolutionType);
+                mergeGraph(directDep, dependencyGraphFinal, scope, resolutionType, depPath);
             }
         }
     }
@@ -317,7 +352,8 @@ public class ResolutionEngine {
                         unresolvedNode.pkgDesc,
                         unresolvedNode.scope,
                         unresolvedNode.resolutionType,
-                        true));
+                        true, blendedDepOptional.flatMap(BlendedManifest.Dependency::path)
+                        .orElse(null)));
                 continue;
             }
             unresolvedRequests.add(resolutionRequest);
@@ -455,19 +491,19 @@ public class ResolutionEngine {
         PackageDescriptor pkgDesc = resolutionResp.resolvedDescriptor();
         PackageDependencyScope scope = resolutionReq.scope();
         DependencyResolutionType resolvedType = resolutionReq.resolutionType();
+        Path depPath = resolutionReq.path().orElse(null);
 
         // Merge the dependency graph only if the node is accepted by the graphBuilder
         NodeStatus nodeStatus = graphBuilder.addResolvedNode(pkgDesc, scope, resolvedType);
         if (nodeStatus == NodeStatus.ACCEPTED) {
             mergeGraph(pkgDesc, resolutionResp.dependencyGraph().orElseThrow(
-                    () -> new IllegalStateException("Graph cannot be null in the resolved dependency: " +
-                            pkgDesc.toString())),
-                    scope, resolvedType);
+                    () -> new IllegalStateException("Graph cannot be null in the resolved dependency: " + pkgDesc)),
+                    scope, resolvedType, depPath);
         }
 
         // Remove from the unresolved nodes list for dumping the raw graph
         if (resolutionOptions.dumpGraph() || resolutionOptions.dumpRawGraphs()) {
-            unresolvedDeps.remove(new DependencyNode(pkgDesc, scope, resolvedType));
+            unresolvedDeps.remove(new DependencyNode(pkgDesc, scope, resolvedType, depPath));
         }
     }
 
@@ -539,28 +575,37 @@ public class ResolutionEngine {
         private final PackageDependencyScope scope;
         private final DependencyResolutionType resolutionType;
         private final boolean isError;
+        private final Path path;
 
         public DependencyNode(PackageDescriptor pkgDesc,
                               PackageDependencyScope scope,
-                              DependencyResolutionType resolutionType) {
+                              DependencyResolutionType resolutionType,
+                              Path path) {
             this.pkgDesc = Objects.requireNonNull(pkgDesc);
             this.scope = Objects.requireNonNull(scope);
             this.resolutionType = Objects.requireNonNull(resolutionType);
+            this.path = path;
             this.isError = false;
         }
 
         public DependencyNode(PackageDescriptor pkgDesc,
                               PackageDependencyScope scope,
                               DependencyResolutionType resolutionType,
-                              boolean errorNode) {
+                              boolean errorNode,
+                              Path path) {
             this.pkgDesc = Objects.requireNonNull(pkgDesc);
             this.scope = Objects.requireNonNull(scope);
             this.resolutionType = Objects.requireNonNull(resolutionType);
             this.isError = errorNode;
+            this.path = path;
+        }
+
+        public DependencyNode(PackageDescriptor pkgDesc, Path path) {
+            this(pkgDesc, PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE, path);
         }
 
         public DependencyNode(PackageDescriptor pkgDesc) {
-            this(pkgDesc, PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE);
+            this(pkgDesc, PackageDependencyScope.DEFAULT, DependencyResolutionType.SOURCE, null);
         }
 
         public PackageDescriptor pkgDesc() {
@@ -577,6 +622,10 @@ public class ResolutionEngine {
 
         public boolean errorNode() {
             return isError;
+        }
+
+        public Optional<Path> path() {
+            return Optional.ofNullable(path);
         }
 
         @Override
@@ -596,7 +645,8 @@ public class ResolutionEngine {
                     Objects.equals(pkgDesc.repository(), that.pkgDesc.repository()) &&
                     scope == that.scope &&
                     resolutionType == that.resolutionType &&
-                    isError == that.isError;
+                    isError == that.isError &&
+                    path == that.path;
         }
 
         @Override

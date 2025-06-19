@@ -473,7 +473,7 @@ class ModuleContext {
     }
 
     private static boolean shouldGenerateBir(ModuleContext moduleContext, CompilerContext compilerContext) {
-        if (moduleContext.project.kind().equals(ProjectKind.BALA_PROJECT)) {
+        if (!moduleContext.project.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
             return true;
         }
         if (ProjectUtils.isBuiltInPackage(
@@ -484,8 +484,7 @@ class ModuleContext {
         if (Boolean.parseBoolean(compilerOptions.get(CompilerOptionName.DUMP_BIR_FILE))) {
             return true;
         }
-        return moduleContext.project.kind().equals(ProjectKind.BUILD_PROJECT)
-                && moduleContext.project().buildOptions().enableCache();
+        return moduleContext.project().buildOptions().enableCache();
     }
 
     private static ByteArrayOutputStream generateBIR(ModuleContext moduleContext, CompilerContext compilerContext) {

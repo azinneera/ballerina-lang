@@ -18,6 +18,7 @@
 package io.ballerina.projects.environment;
 
 import io.ballerina.projects.CompilerPluginCache;
+import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.internal.environment.BallerinaDistribution;
 import io.ballerina.projects.internal.environment.BallerinaUserHome;
 import io.ballerina.projects.internal.environment.DefaultEnvironment;
@@ -25,6 +26,7 @@ import io.ballerina.projects.internal.environment.DefaultPackageResolver;
 import io.ballerina.projects.internal.environment.EnvironmentPackageCache;
 import io.ballerina.projects.internal.repositories.CustomPkgRepositoryContainer;
 import io.ballerina.projects.internal.repositories.LocalPackageRepository;
+import io.ballerina.projects.internal.repositories.WorkspaceFSRepository;
 import org.ballerinalang.compiler.CompilerPhase;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.CompilerOptions;
@@ -45,6 +47,7 @@ public class EnvironmentBuilder {
 
     private Path ballerinaHome;
     private Path userHome;
+    private Workspace workspace;
 
     public static EnvironmentBuilder getBuilder() {
         return new EnvironmentBuilder();
@@ -61,6 +64,11 @@ public class EnvironmentBuilder {
 
     public EnvironmentBuilder setBallerinaHome(Path ballerinaHome) {
         this.ballerinaHome = ballerinaHome;
+        return this;
+    }
+
+    public EnvironmentBuilder setWorkspace(Workspace workspace) {
+        this.workspace = workspace;
         return this;
     }
 
@@ -89,9 +97,13 @@ public class EnvironmentBuilder {
         Map<String, PackageRepository> customRepositories = ballerinaUserHome.customRepositories().entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
+        PackageRepository workspaceFSRepository = null;
+        if (this.workspace != null) {
+            workspaceFSRepository = new WorkspaceFSRepository(environment, this.workspace);
+        }
         PackageResolver packageResolver = new DefaultPackageResolver(distributionRepository,
                 ballerinaCentralRepo, ballerinaUserHome.localPackageRepository(),
-                customRepositories, packageCache);
+                customRepositories, workspaceFSRepository, packageCache);
         environment.addService(PackageResolver.class, packageResolver);
 
         CompilerContext compilerContext = populateCompilerContext();
@@ -100,6 +112,7 @@ public class EnvironmentBuilder {
         environment.addService(CompilerPluginCache.class, new CompilerPluginCache());
         return environment;
     }
+
 
     private BallerinaDistribution getBallerinaDistribution(DefaultEnvironment environment) {
         return (ballerinaHome != null) ?

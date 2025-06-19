@@ -366,4 +366,14 @@ public final class ProjectPaths {
         }
         return Optional.empty();
     }
+
+    public static Optional<Path> findWorkspaceRoot(Path projectPath) {
+        Path workspaceRoot = projectPath.toAbsolutePath().getParent();
+        if (workspaceRoot != null) {
+            if (Files.exists(workspaceRoot.resolve(ProjectConstants.BAL_WORKSPACE_TOML))) {
+                return Optional.of(workspaceRoot);
+            }
+        }
+        return Optional.empty();
+    }
 }
