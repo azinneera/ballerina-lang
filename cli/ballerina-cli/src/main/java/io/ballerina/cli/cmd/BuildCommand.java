@@ -28,16 +28,22 @@ import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
+import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.BUILD_COMMAND;
 import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
@@ -230,9 +236,40 @@ public class BuildCommand implements BLauncherCmd {
             sticky = false;
         }
 
+        BuildOptions buildOptions = constructBuildOptions();
+
+        // Validate Settings.toml file
+        RepoUtils.readSettings();
+
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        if (workspaceRoot.isPresent()) {
+            Workspace workspace = Workspace.from(workspaceRoot.get());
+            DependencyGraph<BuildProject> projectDependencyGraph = workspace.dependencyGraph();
+            Optional<BuildProject> buildProjectOptional = projectDependencyGraph.getNodes().stream()
+                    .filter(node -> node.sourceRoot().equals(this.projectPath.toAbsolutePath())).findFirst();
+
+            Collection<BuildProject> allDependencies = projectDependencyGraph.getAllDependencies(
+                    buildProjectOptional.orElseThrow());
+            List<BuildProject> topologicallySortedList = projectDependencyGraph.toTopologicallySortedList();
+            for (BuildProject buildProject : topologicallySortedList) {
+                if (buildProject.compareTo(buildProjectOptional.get()) != 0
+                        && !allDependencies.contains(buildProject)) {
+                    continue;
+                }
+                buildWorkspaceProject(buildProject, start, buildOptions);
+            }
+        } else {
+            buildProject(start, buildOptions);
+        }
+
+        if (this.exitWhenFinish) {
+            Runtime.getRuntime().exit(0);
+        }
+    }
+
+    private void buildProject(long start, BuildOptions buildOptions) {
         // load project
         Project project;
-        BuildOptions buildOptions = constructBuildOptions();
 
         boolean isSingleFileBuild = false;
         if (FileUtils.hasExtension(this.projectPath)) {
@@ -279,9 +316,6 @@ public class BuildCommand implements BLauncherCmd {
             }
         }
 
-        // Validate Settings.toml file
-        RepoUtils.readSettings();
-
         if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
             this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
                     "flag is not set");
@@ -308,6 +342,71 @@ public class BuildCommand implements BLauncherCmd {
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
+    }
+
+    private void buildWorkspaceProject(BuildProject project, long start, BuildOptions buildOptions) {
+
+        try {
+            if (buildOptions.dumpBuildTime()) {
+                start = System.currentTimeMillis();
+                BuildTime.getInstance().timestamp = start;
+            }
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        // Check if the output flag is set when building all the modules.
+        if (null != this.output) {
+            CommandUtil.printError(this.errStream,
+                    "'-o' and '--output' are only supported when building a single Ballerina " +
+                            "file.",
+                    "bal build -o <output-file> <ballerina-file> ",
+                    true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        try {
+            if (buildOptions.dumpBuildTime()) {
+                start = System.currentTimeMillis();
+                BuildTime.getInstance().timestamp = start;
+            }
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
+            this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
+                    "flag is not set");
+        }
+
+        // Check package files are modified after last build
+        boolean isPackageModified = isProjectUpdated(project);
+
+        TaskExecutor.TaskBuilder taskBuilder = new TaskExecutor.TaskBuilder()
+                // clean the target directory(projects only)
+                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()))
+                // Run build tools
+                .addTask(new RunBuildToolsTask(outStream))
+                // resolve maven dependencies in Ballerina.toml
+                .addTask(new ResolveMavenDependenciesTask(outStream))
+                // compile the modules
+                .addTask(new CompileTask(outStream, errStream, false, true,
+                        isPackageModified, buildOptions.enableCache()));
+                // If the project has no dependents, create the executable JAR file
+        if (project.workspace().orElseThrow().dependencyGraph().getAllDependents(project).isEmpty()) {
+            taskBuilder.addTask(new CreateExecutableTask(outStream, this.output, null, false));
+        }
+        taskBuilder.addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime());
+
+        taskBuilder.build().executeTasks(project);
     }
 
     private BuildOptions constructBuildOptions() {
