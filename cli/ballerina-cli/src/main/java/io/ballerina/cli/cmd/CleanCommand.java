@@ -49,9 +49,6 @@ public class CleanCommand implements BLauncherCmd {
     @CommandLine.Option(names = "--target-dir", description = "target directory path")
     private Path targetDir;
 
-    @CommandLine.Option(names = "--workspace", description = "whether it is a workspace or a project")
-    private boolean workspace;
-
     public CleanCommand(Path projectPath, boolean exitWhenFinish) {
         this.projectPath = projectPath;
         this.outStream = System.out;
@@ -80,8 +77,8 @@ public class CleanCommand implements BLauncherCmd {
         }
         if (this.workspace) {
             // Iterate through all the build projects and delete the target
-            Workspace balWorkspace = Workspace.from(this.projectPath);
-            for (BuildProject buildProject : balWorkspace.buildProjects()) {
+            Workspace balWorkspace = Workspace.load(this.projectPath);
+            for (BuildProject buildProject : balWorkspace.projects()) {
                 validateAndDeleteTheTarget(buildProject);
             }
             return;

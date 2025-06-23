@@ -19,13 +19,21 @@ package io.ballerina.projects.util;
 
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.TomlDocument;
+import io.ballerina.toml.semantic.TomlType;
+import io.ballerina.toml.semantic.ast.TomlTableNode;
+import io.ballerina.toml.semantic.ast.TopLevelNode;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 import static io.ballerina.projects.util.ProjectConstants.BALLERINA_TOML;
+import static io.ballerina.projects.util.ProjectConstants.BAL_WORKSPACE_TOML;
+import static io.ballerina.projects.util.TomlUtil.getStringArrayFromTableNode;
 
 /**
  * Consists of static methods that may be used to obtain {@link Project}
@@ -52,7 +60,7 @@ public final class ProjectPaths {
         }
 
         if (Files.isDirectory(filepath)) {
-            if (hasBallerinaToml(filepath) || hasPackageJson(filepath)) {
+            if (isPackageRoot(filepath) || hasPackageJson(filepath)) {
                 return filepath;
             }
             if (isModulesRoot(filepath) || isGeneratedModulesRoot(filepath) || isAModuleRoot(filepath) ||
@@ -75,7 +83,7 @@ public final class ProjectPaths {
         }
 
         Path absFilePath = filepath.toAbsolutePath().normalize();
-        if (hasBallerinaToml(projectRoot.get())) {
+        if (isPackageRoot(projectRoot.get())) {
             // check if the file is a ballerina project related toml file
             if (isBallerinaRelatedToml(filepath)) {
                 return filepath.getParent();
@@ -296,7 +304,7 @@ public final class ProjectPaths {
         if (ProjectConstants.GENERATED_MODULES_ROOT.equals(Optional.of(parentPath).get().toFile().getName())) {
             parentPath = parentPath.getParent();
         }
-        return hasBallerinaToml(Optional.of(parentPath).get());
+        return isPackageRoot(Optional.of(parentPath).get());
     }
 
     static boolean isDefaultModuleTestFile(Path filePath) {
@@ -309,7 +317,7 @@ public final class ProjectPaths {
         if (ProjectConstants.GENERATED_MODULES_ROOT.equals(projectRoot.toFile().getName())) {
             projectRoot = projectRoot.getParent();
         }
-        return projectRoot != null && hasBallerinaToml(projectRoot);
+        return projectRoot != null && isPackageRoot(projectRoot);
     }
 
     static boolean isNonDefaultModuleSrcFile(Path filePath) {
@@ -319,7 +327,7 @@ public final class ProjectPaths {
         Path projectRoot = modulesRoot.getParent();
         return (ProjectConstants.MODULES_ROOT.equals(modulesRoot.toFile().getName()) ||
                 ProjectConstants.GENERATED_MODULES_ROOT.equals(modulesRoot.toFile().getName()))
-                && hasBallerinaToml(projectRoot);
+                && isPackageRoot(projectRoot);
     }
 
     static boolean isBalaProjectSrcFile(Path filePath) {
@@ -341,10 +349,10 @@ public final class ProjectPaths {
         Path projectRoot = modulesRoot.getParent();
         return (ProjectConstants.MODULES_ROOT.equals(modulesRoot.toFile().getName()) ||
                 ProjectConstants.GENERATED_MODULES_ROOT.equals(modulesRoot.toFile().getName()))
-                && hasBallerinaToml(projectRoot);
+                && isPackageRoot(projectRoot);
     }
 
-    private static boolean hasBallerinaToml(Path filePath) {
+    public static boolean isPackageRoot(Path filePath) {
         Path absFilePath = filePath.toAbsolutePath().normalize();
         return absFilePath.resolve(BALLERINA_TOML).toFile().exists();
     }
@@ -358,7 +366,7 @@ public final class ProjectPaths {
         if (filePath != null) {
             filePath = filePath.toAbsolutePath().normalize();
             if (filePath.toFile().isDirectory()) {
-                if (hasBallerinaToml(filePath) || hasPackageJson(filePath)) {
+                if (isPackageRoot(filePath) || hasPackageJson(filePath)) {
                     return Optional.of(filePath);
                 }
             }
@@ -367,12 +375,50 @@ public final class ProjectPaths {
         return Optional.empty();
     }
 
-    public static Optional<Path> findWorkspaceRoot(Path projectPath) {
-        Path workspaceRoot = projectPath.toAbsolutePath().getParent();
-        if (workspaceRoot != null) {
-            if (Files.exists(workspaceRoot.resolve(ProjectConstants.BAL_WORKSPACE_TOML))) {
-                return Optional.of(workspaceRoot);
+    public static Optional<Path> findWorkspaceRoot(Path filePath) {
+        if (filePath.resolve(ProjectConstants.BAL_WORKSPACE_TOML).toFile().exists()) {
+            return Optional.of(filePath);
+        }
+
+        Path packageRoot;
+        try {
+            packageRoot = packageRoot(filePath).toAbsolutePath().normalize();
+        } catch (ProjectException e) {
+            // the filepath does not belong to a package
+            return Optional.empty();
+        }
+        Optional<Path> workspaceRoot = findWorkspaceRootInner(packageRoot);
+        if (workspaceRoot.isPresent()) {
+            try {
+                TomlDocument balWorkspaceToml = TomlDocument.from(BAL_WORKSPACE_TOML,
+                        Files.readString(workspaceRoot.get().resolve(BAL_WORKSPACE_TOML)));
+                TomlTableNode tomlAstNode = balWorkspaceToml.toml().rootNode();
+                if (!tomlAstNode.entries().isEmpty()) {
+                    TopLevelNode topLevelPkgNode = tomlAstNode.entries().get("workspace");
+                    if (topLevelPkgNode != null && topLevelPkgNode.kind() == TomlType.TABLE) {
+                        TomlTableNode pkgNode = (TomlTableNode) topLevelPkgNode;
+                        for (String pkgEntry : getStringArrayFromTableNode(pkgNode, "packages")) {
+                            Path wpPkgPath = workspaceRoot.get().resolve(pkgEntry).toAbsolutePath().normalize();
+                            if (packageRoot.equals(wpPkgPath)) {
+                                return workspaceRoot;
+                            }
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                throw new ProjectException("error while loading the " + BAL_WORKSPACE_TOML + ": " + e);
             }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Path> findWorkspaceRootInner(Path filePath) {
+        if (filePath != null) {
+            filePath = filePath.toAbsolutePath().normalize();
+            if (filePath.resolve(ProjectConstants.BAL_WORKSPACE_TOML).toFile().exists()) {
+                return Optional.of(filePath);
+            }
+            return findWorkspaceRootInner(filePath.getParent());
         }
         return Optional.empty();
     }

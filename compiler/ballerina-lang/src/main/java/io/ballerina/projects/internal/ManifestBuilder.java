@@ -37,7 +37,6 @@ import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.toml.api.Toml;
 import io.ballerina.toml.semantic.TomlType;
-import io.ballerina.toml.semantic.ast.TomlArrayValueNode;
 import io.ballerina.toml.semantic.ast.TomlBooleanValueNode;
 import io.ballerina.toml.semantic.ast.TomlKeyValueNode;
 import io.ballerina.toml.semantic.ast.TomlStringValueNode;
@@ -81,6 +80,7 @@ import static io.ballerina.projects.util.ProjectConstants.DOT;
 import static io.ballerina.projects.util.ProjectUtils.defaultName;
 import static io.ballerina.projects.util.ProjectUtils.defaultOrg;
 import static io.ballerina.projects.util.ProjectUtils.defaultVersion;
+import static io.ballerina.projects.util.TomlUtil.getStringArrayFromTableNode;
 
 /**
  * Build Manifest using toml files.
@@ -215,11 +215,11 @@ public class ManifestBuilder {
             TopLevelNode topLevelPkgNode = tomlAstNode.entries().get(PACKAGE);
             if (topLevelPkgNode != null && topLevelPkgNode.kind() == TomlType.TABLE) {
                 TomlTableNode pkgNode = (TomlTableNode) topLevelPkgNode;
-                license = getStringArrayFromPackageNode(pkgNode, LICENSE);
-                authors = getStringArrayFromPackageNode(pkgNode, AUTHORS);
-                keywords = getStringArrayFromPackageNode(pkgNode, KEYWORDS);
-                exported = getStringArrayFromPackageNode(pkgNode, EXPORT);
-                includes = getStringArrayFromPackageNode(pkgNode, INCLUDE);
+                license = getStringArrayFromTableNode(pkgNode, LICENSE);
+                authors = getStringArrayFromTableNode(pkgNode, AUTHORS);
+                keywords = getStringArrayFromTableNode(pkgNode, KEYWORDS);
+                exported = getStringArrayFromTableNode(pkgNode, EXPORT);
+                includes = getStringArrayFromTableNode(pkgNode, INCLUDE);
                 repository = getStringValueFromTomlTableNode(pkgNode, REPOSITORY, "");
                 ballerinaVersion = getStringValueFromTomlTableNode(pkgNode, DISTRIBUTION, "");
                 visibility = getStringValueFromTomlTableNode(pkgNode, VISIBILITY, "");
@@ -1064,27 +1064,6 @@ public class ManifestBuilder {
             return defaultValue;
         }
         return value;
-    }
-
-    private List<String> getStringArrayFromPackageNode(TomlTableNode pkgNode, String key) {
-        List<String> elements = new ArrayList<>();
-        TopLevelNode topLevelNode = pkgNode.entries().get(key);
-        if (topLevelNode == null || topLevelNode.kind() == TomlType.NONE) {
-            return elements;
-        }
-        TomlValueNode valueNode = ((TomlKeyValueNode) topLevelNode).value();
-        if (valueNode.kind() == TomlType.NONE) {
-            return elements;
-        }
-        if (valueNode.kind() == TomlType.ARRAY) {
-            TomlArrayValueNode arrayValueNode = (TomlArrayValueNode) valueNode;
-            for (TomlValueNode value : arrayValueNode.elements()) {
-                if (value.kind() == TomlType.STRING) {
-                    elements.add(((TomlStringValueNode) value).getValue());
-                }
-            }
-        }
-        return elements;
     }
 
     private String getStringValueFromPlatformEntry(TomlTableNode pkgNode, String key) {

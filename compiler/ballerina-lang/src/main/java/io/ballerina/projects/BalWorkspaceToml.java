@@ -1,0 +1,105 @@
+/*
+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package io.ballerina.projects;
+
+import io.ballerina.projects.directory.Workspace;
+import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.toml.semantic.ast.TomlTableNode;
+
+/**
+ * Represents the 'BalWorkspace.toml' file in a Ballerina workspace.
+ *
+ * @since 2201.13.0
+ */
+public class BalWorkspaceToml {
+
+    private final TomlDocumentContext balWorkspaceTomlContext;
+    private final Workspace workspace;
+
+    private BalWorkspaceToml(Workspace workspace, TomlDocumentContext ballerinaTomlContext) {
+        this.workspace = workspace;
+        this.balWorkspaceTomlContext = ballerinaTomlContext;
+    }
+
+    public static BalWorkspaceToml from(TomlDocument tomlDocument, Workspace workspace) {
+        return new BalWorkspaceToml(workspace, TomlDocumentContext.from(tomlDocument));
+    }
+
+    public Workspace workspace() {
+        return workspace;
+    }
+
+    public String name() {
+        return ProjectConstants.BAL_WORKSPACE_TOML;
+    }
+
+    public TomlTableNode tomlAstNode() {
+        return tomlDocument().toml().rootNode();
+    }
+
+    public TomlDocument tomlDocument() {
+        return this.balWorkspaceTomlContext.tomlDocument();
+    }
+
+    /** Returns an instance of the BalWorkspaceToml.Modifier.
+     *
+     * @return  BalWorkspaceToml modifier
+     */
+    public BalWorkspaceToml.Modifier modify() {
+        return new BalWorkspaceToml.Modifier(this);
+    }
+
+    /**
+     * Inner class that handles Document modifications.
+     */
+    public static class Modifier {
+        private TomlDocument tomlDocument;
+        private final Workspace workspace;
+
+        private Modifier(BalWorkspaceToml oldDocument) {
+            this.tomlDocument = oldDocument.tomlDocument();
+            this.workspace = oldDocument.workspace();
+        }
+
+        /**
+         * Sets the content to be changed.
+         *
+         * @param content content to change with
+         * @return Document.Modifier that holds the content to be changed
+         */
+        public BalWorkspaceToml.Modifier withContent(String content) {
+            this.tomlDocument = TomlDocument.from(ProjectConstants.BAL_WORKSPACE_TOML, content);
+            return this;
+        }
+
+        /**
+         * Returns a new document with updated content.
+         *
+         * @return document with updated content
+         */
+        public BalWorkspaceToml apply() {
+
+            /* TODO: packages might have been changed, so we need to reload the projects
+                reuse existing projects as much as possible compilation might change,
+                dependency paths might change, reload the packages */
+
+            BalWorkspaceToml balWorkspaceToml = BalWorkspaceToml.from(this.tomlDocument, this.workspace);
+            return balWorkspaceToml;
+        }
+    }
+}
