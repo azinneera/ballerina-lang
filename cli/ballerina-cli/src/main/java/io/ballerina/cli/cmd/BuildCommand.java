@@ -247,9 +247,9 @@ public class BuildCommand implements BLauncherCmd {
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-        } else if (!ProjectPaths.isPackageRoot(this.projectPath)) {
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath) && !ProjectPaths.isWorkspaceRoot(this.projectPath)) {
             CommandUtil.printError(this.errStream,
-                    "the specified path is not a valid Ballerina package or a single Ballerina file: "
+                    "the specified path is not a valid Ballerina package or workspace: "
                             + this.projectPath.toAbsolutePath(), null, true);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
@@ -280,13 +280,9 @@ public class BuildCommand implements BLauncherCmd {
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            buildWorkspace(workspaceRoot.get(), buildOptions);
+            buildWorkspace(start, workspaceRoot.get(), buildOptions);
         } else {
-            buildProject(buildOptions, isSingleFileBuild);
-        }
-
-        if (buildOptions.dumpBuildTime()) {
-            BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            buildProject(start, buildOptions, isSingleFileBuild);
         }
 
         if (this.exitWhenFinish) {
@@ -294,10 +290,13 @@ public class BuildCommand implements BLauncherCmd {
         }
     }
 
-    private void buildWorkspace(Path workspaceRoot, BuildOptions buildOptions) {
+    private void buildWorkspace(long start, Path workspaceRoot, BuildOptions buildOptions) {
         Workspace workspace;
         try {
             workspace = Workspace.load(workspaceRoot, buildOptions);
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
         } catch (ProjectException e) {
             CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
             CommandUtil.exitError(this.exitWhenFinish);
@@ -325,7 +324,7 @@ public class BuildCommand implements BLauncherCmd {
         }
     }
 
-    private void buildProject(BuildOptions buildOptions, boolean isSingleFileBuild) {
+    private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
         // load project
         Project project;
         try {
@@ -333,6 +332,9 @@ public class BuildCommand implements BLauncherCmd {
                 project = SingleFileProject.load(this.projectPath, buildOptions);
             } else {
                 project = BuildProject.load(this.projectPath, buildOptions);
+            }
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
             }
         } catch (ProjectException e) {
             String message = e.getMessage();

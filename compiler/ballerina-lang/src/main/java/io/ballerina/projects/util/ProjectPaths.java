@@ -357,6 +357,11 @@ public final class ProjectPaths {
         return absFilePath.resolve(BALLERINA_TOML).toFile().exists();
     }
 
+    public static boolean isWorkspaceRoot(Path filePath) {
+        Path absFilePath = filePath.toAbsolutePath().normalize();
+        return absFilePath.resolve(BAL_WORKSPACE_TOML).toFile().exists();
+    }
+
     private static boolean hasPackageJson(Path filePath) {
         Path absFilePath = filePath.toAbsolutePath().normalize();
         return absFilePath.resolve(ProjectConstants.PACKAGE_JSON).toFile().exists();
