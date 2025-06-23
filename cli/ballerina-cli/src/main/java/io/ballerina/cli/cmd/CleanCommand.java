@@ -23,12 +23,14 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.projects.util.ProjectUtils;
 import picocli.CommandLine;
 
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.CLEAN_COMMAND;
 
@@ -75,19 +77,32 @@ public class CleanCommand implements BLauncherCmd {
             this.outStream.println(commandUsageInfo);
             return;
         }
-        if (this.workspace) {
+
+        if (ProjectPaths.isPackageRoot(this.projectPath)) {
+            if (this.targetDir == null) {
+                validateAndDeleteTheTarget(BuildProject.load(this.projectPath));
+                return;
+            }
+            validateAndDeleteCustomTarget();
+            if (this.exitWhenFinish) {
+                Runtime.getRuntime().exit(0);
+            }
+        }
+
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
             // Iterate through all the build projects and delete the target
             Workspace balWorkspace = Workspace.load(this.projectPath);
             for (BuildProject buildProject : balWorkspace.projects()) {
                 validateAndDeleteTheTarget(buildProject);
             }
-            return;
+            if (this.exitWhenFinish) {
+                Runtime.getRuntime().exit(0);
+            }
         }
-        if (this.targetDir == null) {
-            validateAndDeleteTheTarget(BuildProject.load(this.projectPath));
-            return;
-        }
-        validateAndDeleteCustomTarget();
+        CommandUtil.printError(this.outStream,
+                    "the directory is not a valid Ballerina package or a workspace: '" + this.projectPath + "'",
+                    null, false);
+        CommandUtil.exitError(this.exitWhenFinish);
     }
 
     private void validateAndDeleteTheTarget(BuildProject project) {
