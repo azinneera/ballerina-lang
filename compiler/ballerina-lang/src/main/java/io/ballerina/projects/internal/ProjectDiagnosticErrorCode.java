@@ -33,6 +33,7 @@ public enum ProjectDiagnosticErrorCode implements DiagnosticCode {
     INVALID_FILE_FORMAT("BCE5003", "error.invalid.file.format"),
     INVALID_PROVIDED_DEPENDENCY("BCE5004", "invalid.provided.dependency"),
     INVALID_PROVIDED_SCOPE_IN_BUILD("BCE5005", "invalid.provided.scope"),
+    MISSING_WP_INFO_IN_BALLERINA_TOML("BCE5006", "missing.workspace.info"),
 
     // Error codes used in DependencyManifestBuilder.
     OLD_DEPENDENCIES_TOML("BCE5101", "old.dependencies.toml"),

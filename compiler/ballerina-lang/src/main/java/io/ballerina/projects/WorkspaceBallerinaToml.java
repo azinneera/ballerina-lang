@@ -26,18 +26,18 @@ import io.ballerina.toml.semantic.ast.TomlTableNode;
  *
  * @since 2201.13.0
  */
-public class BalWorkspaceToml {
+public class WorkspaceBallerinaToml {
 
     private final TomlDocumentContext balWorkspaceTomlContext;
     private final Workspace workspace;
 
-    private BalWorkspaceToml(Workspace workspace, TomlDocumentContext ballerinaTomlContext) {
+    private WorkspaceBallerinaToml(Workspace workspace, TomlDocumentContext ballerinaTomlContext) {
         this.workspace = workspace;
         this.balWorkspaceTomlContext = ballerinaTomlContext;
     }
 
-    public static BalWorkspaceToml from(TomlDocument tomlDocument, Workspace workspace) {
-        return new BalWorkspaceToml(workspace, TomlDocumentContext.from(tomlDocument));
+    public static WorkspaceBallerinaToml from(TomlDocument tomlDocument, Workspace workspace) {
+        return new WorkspaceBallerinaToml(workspace, TomlDocumentContext.from(tomlDocument));
     }
 
     public Workspace workspace() {
@@ -60,8 +60,8 @@ public class BalWorkspaceToml {
      *
      * @return  BalWorkspaceToml modifier
      */
-    public BalWorkspaceToml.Modifier modify() {
-        return new BalWorkspaceToml.Modifier(this);
+    public WorkspaceBallerinaToml.Modifier modify() {
+        return new WorkspaceBallerinaToml.Modifier(this);
     }
 
     /**
@@ -71,7 +71,7 @@ public class BalWorkspaceToml {
         private TomlDocument tomlDocument;
         private final Workspace workspace;
 
-        private Modifier(BalWorkspaceToml oldDocument) {
+        private Modifier(WorkspaceBallerinaToml oldDocument) {
             this.tomlDocument = oldDocument.tomlDocument();
             this.workspace = oldDocument.workspace();
         }
@@ -82,7 +82,7 @@ public class BalWorkspaceToml {
          * @param content content to change with
          * @return Document.Modifier that holds the content to be changed
          */
-        public BalWorkspaceToml.Modifier withContent(String content) {
+        public WorkspaceBallerinaToml.Modifier withContent(String content) {
             this.tomlDocument = TomlDocument.from(ProjectConstants.BAL_WORKSPACE_TOML, content);
             return this;
         }
@@ -92,13 +92,13 @@ public class BalWorkspaceToml {
          *
          * @return document with updated content
          */
-        public BalWorkspaceToml apply() {
+        public WorkspaceBallerinaToml apply() {
 
             /* TODO: packages might have been changed, so we need to reload the projects
                 reuse existing projects as much as possible compilation might change,
                 dependency paths might change, reload the packages */
 
-            BalWorkspaceToml balWorkspaceToml = BalWorkspaceToml.from(this.tomlDocument, this.workspace);
+            WorkspaceBallerinaToml balWorkspaceToml = WorkspaceBallerinaToml.from(this.tomlDocument, this.workspace);
             return balWorkspaceToml;
         }
     }

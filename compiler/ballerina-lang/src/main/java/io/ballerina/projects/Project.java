@@ -42,8 +42,8 @@ public abstract class Project {
     private BuildOptions buildOptions;
     protected ProjectEnvironment projectEnvironment;
     private final ProjectKind projectKind;
-    private Map<PackageManifest.Tool.Field, ToolContext> toolContextMap;
-    private final List<CompilerPluginContextIml> compilerPluginContexts;
+    private Map<PackageManifest.Tool.Field, ToolContext> toolContextMap; // remove
+    private final List<CompilerPluginContextIml> compilerPluginContexts; // remove
     protected final Workspace workspace;
 
     protected Project(ProjectKind projectKind,
@@ -90,6 +90,7 @@ public abstract class Project {
         return projectKind;
     }
 
+    @Deprecated
     public Package currentPackage() {
         // TODO Handle concurrent read/write to the currentPackage variable
         return this.currentPackage;

@@ -30,7 +30,6 @@ import picocli.CommandLine;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.CLEAN_COMMAND;
 
@@ -92,7 +91,7 @@ public class CleanCommand implements BLauncherCmd {
         if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
             // Iterate through all the build projects and delete the target
             Workspace balWorkspace = Workspace.load(this.projectPath);
-            for (BuildProject buildProject : balWorkspace.projects()) {
+            for (BuildProject buildProject : balWorkspace.packages()) {
                 validateAndDeleteTheTarget(buildProject);
             }
             if (this.exitWhenFinish) {

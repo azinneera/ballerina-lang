@@ -155,7 +155,7 @@ public class BlendedManifest {
                             diagnostics.add(diagnostic);
                             continue;
                         }
-                        for (BuildProject buildProject : project.workspace().get().projects()) {
+                        for (BuildProject buildProject : project.workspace().get().packages()) {
                             if (buildProject.sourceRoot().equals(dependencyPath)) {
                                 pkgOrg = buildProject.currentPackage().packageOrg();
                                 pkgName = buildProject.currentPackage().packageName();

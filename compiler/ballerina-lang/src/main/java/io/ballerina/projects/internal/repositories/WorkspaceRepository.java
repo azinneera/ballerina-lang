@@ -27,7 +27,6 @@ import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.Workspace;
-import io.ballerina.projects.environment.Environment;
 import io.ballerina.projects.environment.ResolutionOptions;
 import io.ballerina.projects.environment.ResolutionRequest;
 
@@ -40,19 +39,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class WorkspaceFSRepository extends AbstractPackageRepository {
+public class WorkspaceRepository extends AbstractPackageRepository {
 
-    private final Environment environment;
     private final Workspace workspace;
 
-    public WorkspaceFSRepository (Environment environment, Workspace workspace) {
-        this.environment = environment;
+    public WorkspaceRepository(Workspace workspace) {
         this.workspace = workspace;
     }
 
     @Override
     protected List<PackageVersion> getPackageVersions(PackageOrg org, PackageName name, PackageVersion version) {
-        return this.workspace.projects().stream().filter(project -> project.currentPackage().packageOrg().equals(org)
+        return this.workspace.packages().stream().filter(project -> project.currentPackage().packageOrg().equals(org)
                 && project.currentPackage().packageName().equals(name)).findFirst().map(project ->
                 Collections.singletonList(project.currentPackage().packageVersion())).orElse(Collections.emptyList());
     }
@@ -60,7 +57,7 @@ public class WorkspaceFSRepository extends AbstractPackageRepository {
     @Override
     protected DependencyGraph<PackageDescriptor> getDependencyGraph(
             PackageOrg org, PackageName name, PackageVersion version) {
-        for (Project project : this.workspace.projects()) {
+        for (Project project : this.workspace.packages()) {
             if (project.currentPackage().packageOrg().equals(org)
                     && project.currentPackage().packageName().equals(name)) {
                 DependencyGraph<ResolvedPackageDependency> pkgDependencyGraph =
@@ -82,20 +79,20 @@ public class WorkspaceFSRepository extends AbstractPackageRepository {
 
     @Override
     public boolean isPackageExists(PackageOrg org, PackageName name, PackageVersion version) {
-        return this.workspace.projects().stream().anyMatch(project -> project.currentPackage().packageOrg().equals(org)
+        return this.workspace.packages().stream().anyMatch(project -> project.currentPackage().packageOrg().equals(org)
                 && project.currentPackage().packageName().equals(name));
     }
 
     @Override
     public Collection<ModuleDescriptor> getModules(PackageOrg org, PackageName name, PackageVersion version) {
-        return this.workspace.projects().stream().filter(project -> project.currentPackage().packageOrg().equals(org)
+        return this.workspace.packages().stream().filter(project -> project.currentPackage().packageOrg().equals(org)
                 && project.currentPackage().packageName().equals(name)).findFirst().map(project ->
                 project.currentPackage().moduleDependencyGraph().getNodes()).orElse(Collections.emptyList());
     }
 
     @Override
     public Optional<Package> getPackage(ResolutionRequest request, ResolutionOptions options) {
-        return this.workspace.projects().stream().filter(project -> project.currentPackage().descriptor().equals(
+        return this.workspace.packages().stream().filter(project -> project.currentPackage().descriptor().equals(
                 request.packageDescriptor())).findFirst().map(Project::currentPackage);
     }
 
@@ -107,7 +104,7 @@ public class WorkspaceFSRepository extends AbstractPackageRepository {
     @Override
     public Map<String, List<String>> getPackages() {
         Map<String, List<String>> packageMap = new HashMap<>();
-        for (Project project : this.workspace.projects()) {
+        for (Project project : this.workspace.packages()) {
             String pkgEntry = project.currentPackage().descriptor().name() + ":" +
                     project.currentPackage().descriptor().version();
             if (!packageMap.containsKey(project.currentPackage().packageOrg().toString())) {

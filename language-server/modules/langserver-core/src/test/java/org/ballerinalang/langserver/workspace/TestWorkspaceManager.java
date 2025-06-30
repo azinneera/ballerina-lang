@@ -685,7 +685,7 @@ public class TestWorkspaceManager {
     }
 
     @Test
-    public void testWorkspaceProjects() throws WorkspaceDocumentException,
+    public void testWorkspacePackages() throws WorkspaceDocumentException,
             ExecutionException, InterruptedException {
 
         Path workspacePath = RESOURCE_DIRECTORY.resolve("workspace");

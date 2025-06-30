@@ -26,7 +26,7 @@ import io.ballerina.projects.internal.environment.DefaultPackageResolver;
 import io.ballerina.projects.internal.environment.EnvironmentPackageCache;
 import io.ballerina.projects.internal.repositories.CustomPkgRepositoryContainer;
 import io.ballerina.projects.internal.repositories.LocalPackageRepository;
-import io.ballerina.projects.internal.repositories.WorkspaceFSRepository;
+import io.ballerina.projects.internal.repositories.WorkspaceRepository;
 import org.ballerinalang.compiler.CompilerPhase;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.CompilerOptions;
@@ -99,7 +99,7 @@ public class EnvironmentBuilder {
 
         PackageRepository workspaceFSRepository = null;
         if (this.workspace != null) {
-            workspaceFSRepository = new WorkspaceFSRepository(environment, this.workspace);
+            workspaceFSRepository = new WorkspaceRepository(this.workspace);
         }
         PackageResolver packageResolver = new DefaultPackageResolver(distributionRepository,
                 ballerinaCentralRepo, ballerinaUserHome.localPackageRepository(),

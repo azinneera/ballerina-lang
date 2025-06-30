@@ -17,6 +17,7 @@
  */
 package io.ballerina.projects.util;
 
+import io.ballerina.projects.internal.ProjectDiagnosticErrorCode;
 import io.ballerina.toml.semantic.TomlType;
 import io.ballerina.toml.semantic.ast.TomlArrayValueNode;
 import io.ballerina.toml.semantic.ast.TomlKeyValueNode;
@@ -24,6 +25,10 @@ import io.ballerina.toml.semantic.ast.TomlStringValueNode;
 import io.ballerina.toml.semantic.ast.TomlTableNode;
 import io.ballerina.toml.semantic.ast.TomlValueNode;
 import io.ballerina.toml.semantic.ast.TopLevelNode;
+import io.ballerina.toml.semantic.diagnostics.TomlDiagnostic;
+import io.ballerina.tools.diagnostics.Diagnostic;
+import io.ballerina.tools.diagnostics.DiagnosticInfo;
+import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,5 +63,15 @@ public class TomlUtil {
             }
         }
         return elements;
+    }
+
+    // TODO: Fix code and messageFormat parameters in usages.
+    public static Diagnostic createDiagnostic(TopLevelNode tomlTableNode,
+                                              String message,
+                                              ProjectDiagnosticErrorCode errorCode,
+                                              DiagnosticSeverity severity) {
+        DiagnosticInfo diagnosticInfo =
+                new DiagnosticInfo(errorCode.diagnosticId(), errorCode.messageKey(), severity);
+        return new TomlDiagnostic(tomlTableNode.location(), diagnosticInfo, message);
     }
 }

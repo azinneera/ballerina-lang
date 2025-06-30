@@ -35,6 +35,7 @@ import io.ballerina.projects.internal.model.CompilerPluginDescriptor;
 import io.ballerina.projects.util.FileUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
+import io.ballerina.projects.util.TomlUtil;
 import io.ballerina.toml.api.Toml;
 import io.ballerina.toml.semantic.TomlType;
 import io.ballerina.toml.semantic.ast.TomlBooleanValueNode;
@@ -893,13 +894,8 @@ public class ManifestBuilder {
                                   String message,
                                   ProjectDiagnosticErrorCode errorCode,
                                   DiagnosticSeverity severity) {
-        DiagnosticInfo diagnosticInfo =
-                new DiagnosticInfo(errorCode.diagnosticId(), errorCode.messageKey(), severity);
-        TomlDiagnostic tomlDiagnostic = new TomlDiagnostic(
-                tomlTableNode.location(),
-                diagnosticInfo,
-                message);
-        tomlTableNode.addDiagnostic(tomlDiagnostic);
+        Diagnostic diagnostic = TomlUtil.createDiagnostic(tomlTableNode, message, errorCode, severity);
+        tomlTableNode.addDiagnostic(diagnostic);
     }
 
     private BuildOptions setBuildOptions(TomlTableNode tomlTableNode) {

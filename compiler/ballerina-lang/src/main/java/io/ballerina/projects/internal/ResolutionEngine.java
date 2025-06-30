@@ -271,7 +271,7 @@ public class ResolutionEngine {
 
             Path dependencyRepoPath = null;
             if (directDependency.path().isPresent()) {
-                dependencyRepoPath = workspace.projects().stream().filter(project ->
+                dependencyRepoPath = workspace.packages().stream().filter(project ->
                         project.sourceRoot().equals(directDependency.path().orElseThrow()))
                         .findFirst().orElseThrow().targetDir();
             }

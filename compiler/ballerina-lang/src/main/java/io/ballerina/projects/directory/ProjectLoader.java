@@ -74,7 +74,7 @@ public final class ProjectLoader {
                     workspaceRoot = projectRoot.getParent();
                     if (Files.exists(workspaceRoot.resolve(ProjectConstants.BAL_WORKSPACE_TOML))) {
                         Workspace workspace = Workspace.load(workspaceRoot);
-                        return workspace.projects().stream().filter(project ->
+                        return workspace.packages().stream().filter(project ->
                                 project.sourceRoot().equals(projectRoot)).findAny().orElseThrow();
                     }
                 }
@@ -105,7 +105,7 @@ public final class ProjectLoader {
                 workspaceRoot = projectRoot.getParent().resolve(ProjectConstants.BAL_WORKSPACE_TOML);
                 if (Files.exists(workspaceRoot)) {
                     Workspace workspace = Workspace.load(workspaceRoot);
-                    return workspace.projects().stream().filter(project ->
+                    return workspace.packages().stream().filter(project ->
                             project.sourceRoot().equals(projectRoot)).findAny().orElseThrow();
                 }
             }
