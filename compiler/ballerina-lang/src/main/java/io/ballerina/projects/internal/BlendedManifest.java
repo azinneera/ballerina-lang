@@ -53,6 +53,7 @@ public class BlendedManifest {
     private final DiagnosticResult diagnosticResult;
 
     private static final Repository REPOSITORY_LOCAL = new Repository("local");
+    private static final Repository REPOSITORY_WORKSPACE = new Repository("workspace");
     private static final Repository REPOSITORY_NOT_SPECIFIED = new Repository("not_specified");
 
     private BlendedManifest(PackageContainer<Dependency> pkgContainer, DiagnosticResult diagnosticResult) {
@@ -64,6 +65,7 @@ public class BlendedManifest {
                                        PackageManifest packageManifest,
                                        AbstractPackageRepository localPackageRepository,
                                        Map<String, MavenPackageRepository> mavenPackageRepositoryMap,
+                                       AbstractPackageRepository workspacePackageRepository,
                                        boolean offline) {
         List<Diagnostic> diagnostics = new ArrayList<>();
         PackageContainer<Dependency> depContainer = new PackageContainer<>();
@@ -72,9 +74,19 @@ public class BlendedManifest {
             PackageName pkgName = pkgInDepManifest.name();
             PackageVersion pkgVersion = ProjectUtils.isBuiltInPackage(pkgOrg, pkgName.toString()) ?
                     BUILTIN_PACKAGE_VERSION : pkgInDepManifest.version();
+
+            Repository repository;
+            if (workspacePackageRepository != null
+                    && workspacePackageRepository.isPackageExists(pkgOrg, pkgName, null)) {
+                // If the package is available in the workspace repository, we can skip adding it to the container.
+                repository = REPOSITORY_WORKSPACE;
+                pkgVersion = null;
+            } else {
+                repository = REPOSITORY_NOT_SPECIFIED;
+            }
             depContainer.add(pkgOrg, pkgName, new Dependency(pkgOrg, pkgName, pkgVersion,
-                    getRelation(pkgInDepManifest.isTransitive()),
-                    REPOSITORY_NOT_SPECIFIED, moduleNames(pkgInDepManifest), DependencyOrigin.LOCKED));
+                    getRelation(pkgInDepManifest.isTransitive()), repository, moduleNames(pkgInDepManifest),
+                    DependencyOrigin.LOCKED));
         }
 
         for (PackageManifest.Dependency depInPkgManifest : packageManifest.dependencies()) {
@@ -99,7 +111,6 @@ public class BlendedManifest {
                     continue;
                 }
 
-
                 if (depInPkgManifest.repository().equals(ProjectConstants.LOCAL_REPOSITORY_NAME) &&
                         !localPackageRepository.isPackageExists(depInPkgManifest.org(), depInPkgManifest.name(),
                         depInPkgManifest.version())) {
@@ -107,7 +118,7 @@ public class BlendedManifest {
                             ProjectDiagnosticErrorCode.PACKAGE_NOT_FOUND.diagnosticId(),
                             "Dependency version (" + depInPkgManifest.version() +
                                     ") cannot be found in the local repository. " +
-                                    "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name() + "",
+                                    "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name(),
                             DiagnosticSeverity.WARNING);
                     PackageDiagnostic diagnostic = new PackageDiagnostic(
                             diagnosticInfo, depInPkgManifest.location().orElseThrow());
@@ -124,7 +135,7 @@ public class BlendedManifest {
                                 "Dependency version (" + depInPkgManifest.version() +
                                         ") cannot be found in the custom repository (" +
                                         depInPkgManifest.repository() + "). " +
-                                        "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name() + "",
+                                        "org: `" + depInPkgManifest.org() + "` name: " + depInPkgManifest.name(),
                                 DiagnosticSeverity.WARNING);
                         PackageDiagnostic diagnostic = new PackageDiagnostic(
                                 diagnosticInfo, depInPkgManifest.location().orElseThrow());
@@ -133,12 +144,18 @@ public class BlendedManifest {
                     }
                 }
             } else {
-                Collection<String> moduleNames = existingDepOptional.isPresent() ?
-                        existingDepOptional.get().modules : Collections.emptyList();
+                Collection<String> moduleNames;
+                Repository repository;
+                if (existingDepOptional.isPresent()) {
+                    moduleNames = existingDepOptional.get().modules;
+                    repository = existingDepOptional.get().repository;
+                } else {
+                    moduleNames = Collections.emptyList();
+                    repository = REPOSITORY_NOT_SPECIFIED;
+                }
                 depContainer.add(depInPkgManifest.org(), depInPkgManifest.name(), new Dependency(
                         depInPkgManifest.org(), depInPkgManifest.name(), depInPkgManifest.version(),
-                        DependencyRelation.UNKNOWN, REPOSITORY_NOT_SPECIFIED,
-                        moduleNames, DependencyOrigin.USER_SPECIFIED));
+                        DependencyRelation.UNKNOWN, repository, moduleNames, DependencyOrigin.USER_SPECIFIED));
                 continue;
             }
 

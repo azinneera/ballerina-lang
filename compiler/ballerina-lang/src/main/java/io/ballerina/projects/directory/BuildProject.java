@@ -71,7 +71,7 @@ import static io.ballerina.projects.util.ProjectUtils.readBuildJson;
  *
  * @since 2.0.0
  */
-public class BuildProject extends Project {
+public class BuildProject extends Project implements Comparable<BuildProject> {
 
     /**
      * Loads a BuildProject from the provided path.
@@ -82,6 +82,18 @@ public class BuildProject extends Project {
     public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath) {
         return load(environmentBuilder, projectPath, BuildOptions.builder().build());
     }
+
+    /**
+     * Loads a BuildProject from the provided path.
+     *
+     * @param projectPath Ballerina project path
+     * @return build project
+     */
+    public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
+                                    Workspace workspace) {
+        return load(environmentBuilder, projectPath, BuildOptions.builder().build(), workspace);
+    }
+
 
     /**
      * Loads a BuildProject from the provided path.
@@ -115,17 +127,31 @@ public class BuildProject extends Project {
      */
     public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
                                     BuildOptions buildOptions) {
+        return load(environmentBuilder, projectPath, buildOptions, null);
+    }
+
+    /**
+     * Loads a BuildProject from provided environment builder, path, build options.
+     *
+     * @param environmentBuilder custom environment builder
+     * @param projectPath Ballerina project path
+     * @param buildOptions build options
+     * @return BuildProject instance
+     */
+    public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
+                                    BuildOptions buildOptions, Workspace workspace) {
         PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(projectPath,
                 buildOptions.disableSyntaxTree());
         BuildOptions mergedBuildOptions = ProjectFiles.createBuildOptions(packageConfig, buildOptions, projectPath);
 
-        BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions);
+        BuildProject buildProject = new BuildProject(environmentBuilder, projectPath, mergedBuildOptions, workspace);
         buildProject.addPackage(packageConfig);
         return buildProject;
     }
 
-    private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions) {
-        super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions);
+    private BuildProject(ProjectEnvironmentBuilder environmentBuilder, Path projectPath, BuildOptions buildOptions,
+                         Workspace workspace) {
+        super(ProjectKind.BUILD_PROJECT, projectPath, environmentBuilder, buildOptions, workspace);
         populateCompilerContext();
     }
 
@@ -204,7 +230,7 @@ public class BuildProject extends Project {
     public Project duplicate() {
         BuildOptions duplicateBuildOptions = BuildOptions.builder().build().acceptTheirs(buildOptions());
         BuildProject buildProject = new BuildProject(
-                ProjectEnvironmentBuilder.getDefaultBuilder(), this.sourceRoot, duplicateBuildOptions);
+                ProjectEnvironmentBuilder.getDefaultBuilder(), this.sourceRoot, duplicateBuildOptions, this.workspace);
         return resetPackage(buildProject);
     }
 
@@ -342,7 +368,7 @@ public class BuildProject extends Project {
     private List<Dependency> getPackageDependencies() {
         PackageResolution packageResolution = this.currentPackage().getResolution();
         ResolvedPackageDependency rootPkgNode = new ResolvedPackageDependency(this.currentPackage(),
-                                                                              PackageDependencyScope.DEFAULT);
+                PackageDependencyScope.DEFAULT);
         DependencyGraph<ResolvedPackageDependency> dependencyGraph = packageResolution.dependencyGraph();
         Collection<ResolvedPackageDependency> directDependencies = dependencyGraph.getDirectDependencies(rootPkgNode);
 
@@ -351,15 +377,15 @@ public class BuildProject extends Project {
         // 1. set root package as a dependency
         Package rootPackage = rootPkgNode.packageInstance();
         Dependency rootPkgDependency = new Dependency(rootPackage.packageOrg().value(),
-                                                      rootPackage.packageName().value(),
-                                                      rootPackage.packageVersion().value().toString());
+                rootPackage.packageName().value(),
+                rootPackage.packageVersion().value().toString());
         // get modules of the root package
         List<Dependency.Module> rootPkgModules = new ArrayList<>();
         for (ModuleId moduleId : rootPackage.moduleIds()) {
             Module module = rootPackage.module(moduleId);
             Dependency.Module depsModule = new Dependency.Module(module.descriptor().org().value(),
-                                                                 module.descriptor().packageName().value(),
-                                                                 module.descriptor().name().toString());
+                    module.descriptor().packageName().value(),
+                    module.descriptor().name().toString());
             rootPkgModules.add(depsModule);
         }
         // sort modules
@@ -376,8 +402,12 @@ public class BuildProject extends Project {
         for (ResolvedPackageDependency directDependency : directDependencies) {
             Package aPackage = directDependency.packageInstance();
             Dependency dependency = new Dependency(aPackage.packageOrg().toString(), aPackage.packageName().value(),
-                                                   aPackage.packageVersion().toString());
+                    aPackage.packageVersion().toString());
 
+            if (aPackage.project().kind().equals(ProjectKind.BUILD_PROJECT)) {
+                // if the direct dependency is a build project, skip it
+                continue;
+            }
             // get modules of the direct dependency package
             BalaFiles.DependencyGraphResult packageDependencyGraph = BalaFiles
                     .createPackageDependencyGraph(directDependency.packageInstance().project().sourceRoot());
@@ -386,8 +416,8 @@ public class BuildProject extends Project {
             List<Dependency.Module> modules = new ArrayList<>();
             for (ModuleDescriptor moduleDescriptor : moduleDescriptors) {
                 Dependency.Module module = new Dependency.Module(moduleDescriptor.org().value(),
-                                                                 moduleDescriptor.packageName().value(),
-                                                                 moduleDescriptor.name().toString());
+                        moduleDescriptor.packageName().value(),
+                        moduleDescriptor.name().toString());
                 modules.add(module);
             }
             // sort modules
@@ -411,8 +441,8 @@ public class BuildProject extends Project {
             if (transDependency.packageInstance() != this.currentPackage()) {
                 Package aPackage = transDependency.packageInstance();
                 Dependency dependency = new Dependency(aPackage.packageOrg().toString(),
-                                                       aPackage.packageName().value(),
-                                                       aPackage.packageVersion().toString());
+                        aPackage.packageName().value(),
+                        aPackage.packageVersion().toString());
                 // get transitive dependencies of the transitive dependency package
                 dependency.setDependencies(getTransitiveDependencies(dependencyGraph, transDependency));
                 // set transitive and scope
@@ -447,8 +477,8 @@ public class BuildProject extends Project {
         for (ResolvedPackageDependency resolvedTransitiveDep : pkgDependencies) {
             Package dependencyPkgContext = resolvedTransitiveDep.packageInstance();
             Dependency dep = new Dependency(dependencyPkgContext.packageOrg().toString(),
-                                            dependencyPkgContext.packageName().value(),
-                                            dependencyPkgContext.packageVersion().toString());
+                    dependencyPkgContext.packageName().value(),
+                    dependencyPkgContext.packageVersion().toString());
             dependencyList.add(dep);
         }
         // sort transitive dependencies list
@@ -537,5 +567,10 @@ public class BuildProject extends Project {
             }
         }
         return generatedResourcesPath;
+    }
+
+    @Override
+    public int compareTo(BuildProject other) {
+        return this.sourceRoot.compareTo(other.sourceRoot);
     }
 }

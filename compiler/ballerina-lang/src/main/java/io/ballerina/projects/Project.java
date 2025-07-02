@@ -18,6 +18,7 @@
 package io.ballerina.projects;
 
 import io.ballerina.projects.buildtools.ToolContext;
+import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.environment.ProjectEnvironment;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.CompilerOptions;
@@ -41,17 +42,20 @@ public abstract class Project {
     private BuildOptions buildOptions;
     protected ProjectEnvironment projectEnvironment;
     private final ProjectKind projectKind;
-    private Map<PackageManifest.Tool.Field, ToolContext> toolContextMap;
-    private final List<CompilerPluginContextIml> compilerPluginContexts;
+    private Map<PackageManifest.Tool.Field, ToolContext> toolContextMap; // remove
+    private final List<CompilerPluginContextIml> compilerPluginContexts; // remove
+    protected final Workspace workspace;
 
     protected Project(ProjectKind projectKind,
                       Path projectPath,
-                      ProjectEnvironmentBuilder projectEnvironmentBuilder, BuildOptions buildOptions) {
+                      ProjectEnvironmentBuilder projectEnvironmentBuilder,
+                      BuildOptions buildOptions) {
         this.projectKind = projectKind;
         this.sourceRoot = projectPath;
         this.buildOptions = buildOptions;
         this.projectEnvironment = projectEnvironmentBuilder.build(this);
         this.compilerPluginContexts = new ArrayList<>();
+        this.workspace = null;
     }
 
     protected Project(ProjectKind projectKind,
@@ -62,6 +66,20 @@ public abstract class Project {
         this.projectEnvironment = projectEnvironmentBuilder.build(this);
         this.buildOptions = BuildOptions.builder().build();
         this.compilerPluginContexts = new ArrayList<>();
+        this.workspace = null;
+    }
+
+    protected Project(ProjectKind projectKind,
+                      Path projectPath,
+                      ProjectEnvironmentBuilder projectEnvironmentBuilder,
+                      BuildOptions buildOptions,
+                      Workspace workspace) {
+        this.projectKind = projectKind;
+        this.sourceRoot = projectPath;
+        this.buildOptions = buildOptions;
+        this.projectEnvironment = projectEnvironmentBuilder.build(this);
+        this.compilerPluginContexts = new ArrayList<>();
+        this.workspace = workspace;
     }
 
     void setBuildOptions(BuildOptions buildOptions) {
@@ -72,6 +90,7 @@ public abstract class Project {
         return projectKind;
     }
 
+    @Deprecated
     public Package currentPackage() {
         // TODO Handle concurrent read/write to the currentPackage variable
         return this.currentPackage;
@@ -101,6 +120,10 @@ public abstract class Project {
 
     public BuildOptions buildOptions() {
         return buildOptions;
+    }
+
+    public Optional<Workspace> workspace() {
+        return Optional.ofNullable(workspace);
     }
 
     /**

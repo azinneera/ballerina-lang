@@ -87,7 +87,7 @@ public final class PackageResolutionTestCaseBuilder {
                 filePaths.expectedGraphNoStickyPath().orElse(null));
 
         BlendedManifest blendedManifest = BlendedManifest.from(dependencyManifest,
-                packageManifest, packageResolver.localRepo(), new HashMap<>(), false);
+                packageManifest, packageResolver.localRepo(), new HashMap<>(), null, false);
         ModuleResolver moduleResolver = new ModuleResolver(rootPkgDes,
                 getModulesInRootPackage(rootPkgDescWrapper, rootPkgDes),
                 blendedManifest, packageResolver, ResolutionOptions.builder().setSticky(sticky).build());
@@ -204,7 +204,7 @@ public final class PackageResolutionTestCaseBuilder {
                                             AbstractPackageRepository centralRepo,
                                             AbstractPackageRepository localRepo,
                                             PackageCache packageCache) {
-            super(distributionRepo, centralRepo, localRepo, packageCache);
+            super(distributionRepo, centralRepo, localRepo, null, packageCache);
             this.localRepo = localRepo;
         }
 

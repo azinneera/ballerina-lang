@@ -353,7 +353,7 @@ public class ResolutionEngine {
      */
     private ResolutionRequest getRequestForUnresolvedNode(DependencyNode unresolvedNode,
                                                           BlendedManifest.Dependency blendedDep) {
-        if (blendedDep == null) {
+        if (blendedDep == null || blendedDep.version() == null) {
             return ResolutionRequest.from(unresolvedNode.pkgDesc(), unresolvedNode.scope(),
                     unresolvedNode.resolutionType(), resolutionOptions.packageLockingMode());
         }

@@ -28,16 +28,26 @@ import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.DependencyGraph;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
+import io.ballerina.projects.directory.Workspace;
+import io.ballerina.projects.util.DependencyUtils;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.BUILD_COMMAND;
 import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
@@ -80,7 +90,7 @@ public class BuildCommand implements BLauncherCmd {
     }
 
     BuildCommand(Path projectPath, PrintStream outStream, PrintStream errStream, boolean exitWhenFinish,
-                        boolean dumpBuildTime) {
+                 boolean dumpBuildTime) {
         this.projectPath = projectPath;
         this.outStream = outStream;
         this.errStream = errStream;
@@ -90,7 +100,7 @@ public class BuildCommand implements BLauncherCmd {
     }
 
     BuildCommand(Path projectPath, PrintStream outStream, PrintStream errStream, boolean exitWhenFinish,
-                        String output) {
+                 String output) {
         this.projectPath = projectPath;
         this.outStream = outStream;
         this.errStream = errStream;
@@ -100,7 +110,7 @@ public class BuildCommand implements BLauncherCmd {
     }
 
     BuildCommand(Path projectPath, PrintStream outStream, PrintStream errStream, boolean exitWhenFinish,
-                        Path targetDir) {
+                 Path targetDir) {
         this.projectPath = projectPath;
         this.outStream = outStream;
         this.errStream = errStream;
@@ -122,12 +132,12 @@ public class BuildCommand implements BLauncherCmd {
     }
 
     @CommandLine.Option(names = {"--output", "-o"}, description = "Write the output to the given file. The provided " +
-                                                                  "output file name may or may not contain the " +
-                                                                  "'.jar' extension.")
+            "output file name may or may not contain the " +
+            "'.jar' extension.")
     private String output;
 
     @CommandLine.Option(names = {"--offline"}, description = "Build/Compile offline without downloading " +
-                                                              "dependencies.")
+            "dependencies.")
     private Boolean offline;
 
     @CommandLine.Parameters (arity = "0..1")
@@ -226,66 +236,124 @@ public class BuildCommand implements BLauncherCmd {
             return;
         }
 
-
-        // load project
-        Project project;
-        BuildOptions buildOptions = constructBuildOptions();
-
+        RepoUtils.readSettings(); // Validate Settings.toml file
         boolean isSingleFileBuild = false;
+
         if (FileUtils.hasExtension(this.projectPath)) {
             try {
-                if (buildOptions.dumpBuildTime()) {
-                    start = System.currentTimeMillis();
-                    BuildTime.getInstance().timestamp = start;
-                }
-                project = SingleFileProject.load(this.projectPath, buildOptions);
-                if (buildOptions.dumpBuildTime()) {
-                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-                }
+                isSingleFileBuild = true;
             } catch (ProjectException e) {
                 CommandUtil.printError(this.errStream, e.getMessage(), null, false);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            isSingleFileBuild = true;
-        } else {
-            // Check if the output flag is set when building all the modules.
-            if (null != this.output) {
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath) && !ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is not a valid Ballerina package or workspace: "
+                            + this.projectPath.toAbsolutePath(), null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        // Check if the output flag is set when building all the modules.
+        if (!isSingleFileBuild && null != this.output) {
+            CommandUtil.printError(this.errStream,
+                    "'-o' and '--output' are only supported when building a single Ballerina " +
+                            "file.",
+                    "bal build -o <output-file> <ballerina-file> ",
+                    true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions(workspaceRoot.isPresent());
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+            BuildTime.getInstance().timestamp = start;
+        }
+
+        if (workspaceRoot.isPresent()) {
+            if (targetDir != null) {
                 CommandUtil.printError(this.errStream,
-                        "'-o' and '--output' are only supported when building a single Ballerina " +
-                                "file.",
-                        "bal build -o <output-file> <ballerina-file> ",
-                        true);
+                        "'--target-dir' is not supported for workspaces", null, true);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
+            buildWorkspace(start, workspaceRoot.get(), buildOptions);
+        } else {
+            buildProject(start, buildOptions, isSingleFileBuild);
+        }
 
-            try {
-                if (buildOptions.dumpBuildTime()) {
-                    start = System.currentTimeMillis();
-                    BuildTime.getInstance().timestamp = start;
-                }
+        if (this.exitWhenFinish) {
+            Runtime.getRuntime().exit(0);
+        }
+    }
+
+    private void buildWorkspace(long start, Path workspaceRoot, BuildOptions buildOptions) {
+        Workspace workspace;
+        try {
+            workspace = Workspace.load(workspaceRoot, buildOptions);
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+        DependencyGraph<ResolvedPackageDependency> packageDependencyGraph = DependencyUtils.getWorkspaceDependencyGraph(workspace);
+        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                packageDependencyGraph.toTopologicallySortedList());
+        if (!workspaceRoot.equals(this.projectPath)) {
+            // If the project path is not the workspace root, filter the topologically sorted list to include only
+            // the projects that are dependencies of the project at the specified path.
+            Optional<ResolvedPackageDependency> buildProjectOptional = packageDependencyGraph.getNodes().stream()
+                    .filter(node -> node.packageInstance().project().sourceRoot().equals(this.projectPath.toAbsolutePath())).findFirst();
+            Collection<ResolvedPackageDependency> packageDependencies = packageDependencyGraph.getAllDependencies(
+                    buildProjectOptional.orElseThrow());
+            // remove projects that are not dependencies of the project at the specified path
+            topologicallySortedList.removeIf(pkgNode -> !packageDependencies.contains(pkgNode)
+                    && pkgNode.packageInstance().descriptor().equals(
+                            buildProjectOptional.orElseThrow().packageInstance().descriptor()));
+        }
+        for (ResolvedPackageDependency pkgNode : topologicallySortedList) {
+            boolean hasDependents = !packageDependencyGraph.getAllDependents(pkgNode)
+                    .isEmpty();
+            executeTasks(buildOptions, false, pkgNode.packageInstance().project(), hasDependents);
+        }
+    }
+
+    private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
+        // load project
+        Project project;
+        try {
+            if (isSingleFileBuild) {
+                project = SingleFileProject.load(this.projectPath, buildOptions);
+            } else {
                 project = BuildProject.load(this.projectPath, buildOptions);
-                if (buildOptions.dumpBuildTime()) {
-                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-                }
-            } catch (ProjectException e) {
-                CommandUtil.printError(this.errStream, e.getMessage(), null, false);
-                CommandUtil.exitError(this.exitWhenFinish);
-                return;
             }
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+        } catch (ProjectException e) {
+            String message = e.getMessage();
+            if (isSingleFileBuild) {
+                message = "failed to load the file: " + message;
+            } else {
+                message = "failed to load the project: " + message;
+            }
+            CommandUtil.printError(this.errStream, message, null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
         }
+        executeTasks(buildOptions, isSingleFileBuild, project, false);
+    }
 
-        // Validate Settings.toml file
-        RepoUtils.readSettings();
-
-        if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
-            this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
-                    "flag is not set");
-        }
-
-        // Check package files are modified after last build
-        boolean isPackageModified = isProjectUpdated(project);
+    private void executeTasks(BuildOptions buildOptions, boolean isSingleFileBuild, Project project,
+                              boolean hasDependents) {
+        validateGraalVmOption(project);
+        boolean isPackageModified = isProjectUpdated(project); // Check package files are modified after last build
 
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
@@ -293,21 +361,44 @@ public class BuildCommand implements BLauncherCmd {
                 // Run build tools
                 .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
                 // resolve maven dependencies in Ballerina.toml
-                .addTask(new ResolveMavenDependenciesTask(outStream))
+                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
                 // compile the modules
                 .addTask(new CompileTask(outStream, errStream, false, true,
                         isPackageModified, buildOptions.enableCache()))
-                .addTask(new CreateExecutableTask(outStream, this.output, null, false))
+                .addTask(new CreateExecutableTask(outStream, output, null, false), hasDependents)
                 .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
                 .build();
-
         taskExecutor.executeTasks(project);
-        if (this.exitWhenFinish) {
-            Runtime.getRuntime().exit(0);
+    }
+
+    @Override
+    public String getName() {
+        return BUILD_COMMAND;
+    }
+
+    @Override
+    public void printLongDesc(StringBuilder out) {
+        out.append(BLauncherCmd.getCommandUsageInfo(BUILD_COMMAND));
+    }
+
+    @Override
+    public void printUsage(StringBuilder out) {
+        out.append("  bal build [-o <output>] [--offline] \\n\" +\n" +
+                "            \"                    [<ballerina-file | package-path>]");
+    }
+
+    @Override
+    public void setParentCmdParser(CommandLine parentCmdParser) {
+    }
+
+    private void validateGraalVmOption(Project project) {
+        if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
+            this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
+                    "flag is not set");
         }
     }
 
-    private BuildOptions constructBuildOptions() {
+    private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
 
         buildOptionsBuilder
@@ -334,31 +425,11 @@ public class BuildCommand implements BLauncherCmd {
                 .setOptimizeDependencyCompilation(optimizeDependencyCompilation)
                 .setLockingMode(lockingMode);
 
-        if (targetDir != null) {
+        if (targetDir != null && !workspaceBuild) {
             buildOptionsBuilder.targetDir(targetDir.toString());
         }
 
         return buildOptionsBuilder.setConfigSchemaGen(configSchemaGen)
                 .build();
-    }
-
-    @Override
-    public String getName() {
-        return BUILD_COMMAND;
-    }
-
-    @Override
-    public void printLongDesc(StringBuilder out) {
-        out.append(BLauncherCmd.getCommandUsageInfo(BUILD_COMMAND));
-    }
-
-    @Override
-    public void printUsage(StringBuilder out) {
-        out.append("  bal build [-o <output>] [--offline] \\n\" +\n" +
-                "            \"                    [<ballerina-file | package-path>]");
-    }
-
-    @Override
-    public void setParentCmdParser(CommandLine parentCmdParser) {
     }
 }

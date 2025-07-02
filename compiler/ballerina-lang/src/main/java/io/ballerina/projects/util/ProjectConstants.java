@@ -135,6 +135,7 @@ public final class ProjectConstants {
 
     public static final String BALA_DOCS_DIR = "docs";
     public static final String REPOSITORIES_DIR = "repositories";
+    public static final String WORKSPACE_REPOSITORY_NAME = "workspace";
     public static final String LOCAL_REPOSITORY_NAME = "local";
     public static final String DISTRIBUTION_REPOSITORY_NAME = "distribution";
     public static final String CENTRAL_REPOSITORY_CACHE_NAME = "central.ballerina.io";

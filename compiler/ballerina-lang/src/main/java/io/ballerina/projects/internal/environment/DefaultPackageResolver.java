@@ -23,6 +23,7 @@ import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageDependencyScope;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageVersion;
+import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.environment.PackageCache;
 import io.ballerina.projects.environment.PackageMetadataResponse;
 import io.ballerina.projects.environment.PackageRepository;
@@ -59,17 +60,7 @@ public class DefaultPackageResolver implements PackageResolver {
     private final PackageRepository localRepo;
     private final Map<String, PackageRepository> customRepos;
     private final WritablePackageCache packageCache;
-
-    public DefaultPackageResolver(PackageRepository distributionRepo,
-                                  PackageRepository centralRepo,
-                                  PackageRepository localRepo,
-                                  PackageCache packageCache) {
-        this.distributionRepo = distributionRepo;
-        this.centralRepo = centralRepo;
-        this.localRepo = localRepo;
-        this.customRepos = new HashMap<>();
-        this.packageCache = (WritablePackageCache) packageCache;
-    }
+    private final PackageRepository workspaceRepo;
 
     public DefaultPackageResolver(PackageRepository distributionRepo,
                                   PackageRepository centralRepo,
@@ -80,6 +71,21 @@ public class DefaultPackageResolver implements PackageResolver {
         this.centralRepo = centralRepo;
         this.customRepos = customRepos;
         this.localRepo = localRepo;
+        this.workspaceRepo = null;
+        this.packageCache = (WritablePackageCache) packageCache;
+    }
+
+    public DefaultPackageResolver(PackageRepository distributionRepo,
+                                  PackageRepository centralRepo,
+                                  PackageRepository workspaceRepo,
+                                  PackageRepository localRepo,
+                                  Map<String, PackageRepository> customRepos,
+                                  PackageCache packageCache) {
+        this.distributionRepo = distributionRepo;
+        this.centralRepo = centralRepo;
+        this.customRepos = customRepos;
+        this.localRepo = localRepo;
+        this.workspaceRepo = workspaceRepo;
         this.packageCache = (WritablePackageCache) packageCache;
     }
 
@@ -127,6 +133,7 @@ public class DefaultPackageResolver implements PackageResolver {
                                                                       ResolutionOptions options) {
         Collection<ResolutionRequest> localRepoRequests = new ArrayList<>();
         Map<PackageRepository, ArrayList<ResolutionRequest>> customRepoRequestMap = new HashMap<>();
+        Collection<ResolutionRequest> workspaceRequests = new ArrayList<>();
         for (ResolutionRequest request : requests) {
             Optional<String> repository = request.packageDescriptor().repository();
             if (repository.isPresent() && repository.get().equals(ProjectConstants.LOCAL_REPOSITORY_NAME)) {
@@ -141,12 +148,18 @@ public class DefaultPackageResolver implements PackageResolver {
                     requestList.add(request);
                     customRepoRequestMap.put(customRepository, requestList);
                 }
+            } else if (workspaceRepo != null) {
+                workspaceRequests.add(request);
             }
         }
 
         Collection<PackageMetadataResponse> localRepoPackages = localRepoRequests.isEmpty() ?
                 Collections.emptyList() :
                 localRepo.getPackageMetadata(localRepoRequests, options);
+
+        Collection<PackageMetadataResponse> workspacePackages = workspaceRequests.isEmpty() ?
+                Collections.emptyList() :
+                workspaceRepo.getPackageMetadata(workspaceRequests, options);
 
         Collection<PackageMetadataResponse> allCustomRepoPackages = new ArrayList<>();
         for (Map.Entry<PackageRepository, ArrayList<ResolutionRequest>> customRepoRequestEntry :
@@ -166,14 +179,17 @@ public class DefaultPackageResolver implements PackageResolver {
         Collection<ResolutionRequest> centralLoadRequests = requests.stream()
                 .filter(r -> !r.packageDescriptor().isBuiltInPackage())
                 .toList();
+
         Collection<PackageMetadataResponse> latestVersionsInCentral =
                 centralRepo.getPackageMetadata(centralLoadRequests, options);
+
 
         // TODO Unit test following merge
         List<PackageMetadataResponse> responseDescriptors = new ArrayList<>(
                 // Since packages can be resolved from multiple repos
                 // the repos should be provided to the stream in the order of priority.
-                Stream.of(localRepoPackages, allCustomRepoPackages, latestVersionsInDist, latestVersionsInCentral)
+                Stream.of(localRepoPackages, allCustomRepoPackages, latestVersionsInDist, workspacePackages,
+                                latestVersionsInCentral)
                         .flatMap(Collection::stream).collect(Collectors.toMap(
                         PackageMetadataResponse::packageLoadRequest, Function.identity(),
                         (PackageMetadataResponse x, PackageMetadataResponse y) -> {
@@ -241,14 +257,19 @@ public class DefaultPackageResolver implements PackageResolver {
         // 2) Try to load from the local repo, if it is requested from the local repo.
         if (pkgDesc.repository().isPresent()) {
             String repository = pkgDesc.repository().get();
-            if (!ProjectConstants.LOCAL_REPOSITORY_NAME.equals(repository) && customRepos.containsKey(repository)) {
+            if (ProjectConstants.LOCAL_REPOSITORY_NAME.equals(repository)) {
+                return localRepo.getPackage(resolutionReq, options);
+            } else if (customRepos.containsKey(repository)) {
                 return customRepos.get(repository).getPackage(resolutionReq, options);
             }
+            return Optional.empty();
+        }
 
-            if (!ProjectConstants.LOCAL_REPOSITORY_NAME.equals(repository)) {
-                return Optional.empty();
+        if (workspaceRepo != null) {
+            Optional<Package> resolvedPackage = workspaceRepo.getPackage(resolutionReq, options);
+            if (resolvedPackage.isPresent()) {
+                return resolvedPackage;
             }
-            return localRepo.getPackage(resolutionReq, options);
         }
 
         // 3) Try to load from the dist repo

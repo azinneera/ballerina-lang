@@ -39,6 +39,7 @@ import io.ballerina.projects.internal.ResolutionEngine.DependencyNode;
 import io.ballerina.projects.internal.repositories.CustomPkgRepositoryContainer;
 import io.ballerina.projects.internal.repositories.LocalPackageRepository;
 import io.ballerina.projects.internal.repositories.MavenPackageRepository;
+import io.ballerina.projects.internal.repositories.WorkspaceRepository;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.DiagnosticFactory;
@@ -568,7 +569,8 @@ public class PackageResolution {
                 projectEnvContext.getService(CustomPkgRepositoryContainer.class).getCustomPackageRepositories();
         return BlendedManifest.from(rootPackageContext.dependencyManifest(),
                 rootPackageContext.packageManifest(),
-                projectEnvContext.getService(LocalPackageRepository.class), customPackageRepositoryMap, offline);
+                projectEnvContext.getService(LocalPackageRepository.class), customPackageRepositoryMap,
+                projectEnvContext.getService(WorkspaceRepository.class), offline);
     }
 
     private ResolutionOptions getResolutionOptions(PackageContext rootPackageContext,
