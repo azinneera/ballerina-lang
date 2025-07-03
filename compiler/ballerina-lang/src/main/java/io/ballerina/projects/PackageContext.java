@@ -91,6 +91,7 @@ class PackageContext {
                    Map<DocumentId, ResourceContext> resourceContextMap,
                    Map<DocumentId, ResourceContext> testResourceContextMap) {
         this.project = project;
+        this.workspace = project.workspace().orElse(null);
         this.packageId = packageId;
         this.packageManifest = packageManifest;
         this.dependencyManifest = dependencyManifest;
@@ -385,6 +386,10 @@ class PackageContext {
 
     Project project() {
         return this.project;
+    }
+
+    Workspace workspace() {
+        return this.workspace;
     }
 
     DependencyGraph<PackageDescriptor> dependencyGraph() {

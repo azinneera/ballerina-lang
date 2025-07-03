@@ -96,7 +96,12 @@ public class CompileTask implements Task {
     public void execute(Project project) {
         try {
             // Print the source
-            printPackageInfoForProject(project.currentPackage());
+            if (project instanceof SingleFileProject) {
+                printPackageInfo(Workspace.Kind.SINGLE_FILE, project.currentPackage());
+            } else {
+                printPackageInfo(Workspace.Kind.SINGLE_PACKAGE, project.currentPackage());
+            }
+
             // Validate the source
             validateProject(project.currentPackage());
             // Get the package resolution
@@ -130,7 +135,7 @@ public class CompileTask implements Task {
             for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
                 PackageId packageId = packageDependency.packageId();
                 // Print the source
-                printPackageInfoForProject(workspace.getPackage(packageId));
+                printPackageInfo(Workspace.Kind.MULTI_PACKAGE, workspace.getPackage(packageId));
                 // Validate the source
                 validateProject(workspace.getPackage(packageId));
                 // Get the package resolution
@@ -159,9 +164,9 @@ public class CompileTask implements Task {
         }
     }
 
-    private void printPackageInfoForProject(Package pkg) {
+    private void printPackageInfo(Workspace.Kind kind, Package pkg) {
         String sourceName;
-        if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_PACKAGE)) {
+        if (kind.equals(Workspace.Kind.SINGLE_PACKAGE)) {
             sourceName = pkg.getDefaultModule().document(
                     pkg.getDefaultModule().documentIds().iterator().next()).name();
         } else {
@@ -172,6 +177,7 @@ public class CompileTask implements Task {
         this.out.println("Compiling source");
         this.out.println("\t" + sourceName);
     }
+
 
     private void dumpRawGraphsIfRequired(Package pkg, PackageResolution packageResolution, Set<String> packageImports) {
         // We dump the raw graphs twice only if code generator/modifier plugins are engaged

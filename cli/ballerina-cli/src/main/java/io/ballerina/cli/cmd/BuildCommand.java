@@ -277,7 +277,18 @@ public class BuildCommand implements BLauncherCmd {
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            buildWorkspace(start, workspaceRoot.get(), buildOptions);
+            Workspace workspace;
+            try {
+                workspace = Workspace.load(workspaceRoot.get(), buildOptions);
+                if (buildOptions.dumpBuildTime()) {
+                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+                }
+            } catch (ProjectException e) {
+                CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+                CommandUtil.exitError(this.exitWhenFinish);
+                return;
+            }
+            buildWorkspace(workspace, buildOptions);
         } else {
             buildProject(start, buildOptions, isSingleFileBuild);
         }
@@ -287,49 +298,15 @@ public class BuildCommand implements BLauncherCmd {
         }
     }
 
-    private void buildWorkspace(long start, Path workspaceRoot, BuildOptions buildOptions) {
-        Workspace workspace;
-        try {
-            workspace = Workspace.load(workspaceRoot, buildOptions);
-            if (buildOptions.dumpBuildTime()) {
-                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-            }
-        } catch (ProjectException e) {
-            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
-            CommandUtil.exitError(this.exitWhenFinish);
-            return;
-        }
-//        DependencyGraph<ResolvedPackageDependency> packageDependencyGraph = DependencyUtils.getWorkspaceDependencyGraph(workspace);
-//        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
-//                packageDependencyGraph.toTopologicallySortedList());
-//        if (!workspaceRoot.equals(this.projectPath)) {
-//            // If the project path is not the workspace root, filter the topologically sorted list to include only
-//            // the projects that are dependencies of the project at the specified path.
-//            Optional<ResolvedPackageDependency> buildProjectOptional = packageDependencyGraph.getNodes().stream()
-//                    .filter(node -> node.packageInstance().project().sourceRoot().equals(this.projectPath.toAbsolutePath())).findFirst();
-//            Collection<ResolvedPackageDependency> packageDependencies = packageDependencyGraph.getAllDependencies(
-//                    buildProjectOptional.orElseThrow());
-//            // remove projects that are not dependencies of the project at the specified path
-//            topologicallySortedList.removeIf(pkgNode -> !packageDependencies.contains(pkgNode)
-//                    && pkgNode.packageInstance().descriptor().equals(
-//                            buildProjectOptional.orElseThrow().packageInstance().descriptor()));
-//        }
-//        for (ResolvedPackageDependency pkgNode : topologicallySortedList) {
-//            boolean hasDependents = !packageDependencyGraph.getAllDependents(pkgNode)
-//                    .isEmpty();
-//            executeTasks(buildOptions, false, pkgNode.packageInstance().project(), hasDependents);
-//        }
+    private void buildWorkspace(Workspace workspace, BuildOptions buildOptions) {
         validateGraalVmOption(workspace);
-//        boolean isPackageModified = isProjectUpdated(workspace); // Check package files are modified after last build
-
-        boolean isSingleFileBuild = false;
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
-                .addTask(new CleanTargetDirTask(), isSingleFileBuild)
+                .addTask(new CleanTargetDirTask())
                 // Run build tools
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
+                .addTask(new RunBuildToolsTask(outStream))
                 // resolve maven dependencies in Ballerina.toml
-                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
+                .addTask(new ResolveMavenDependenciesTask(outStream))
                 // compile the modules
                 .addTask(new CompileTask(outStream, errStream, false, true,
                         true, buildOptions.enableCache()))
@@ -337,8 +314,6 @@ public class BuildCommand implements BLauncherCmd {
                 .addTask(new DumpBuildTimeTask(outStream))
                 .build();
         taskExecutor.executeTasks(workspace);
-
-
     }
 
     private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {

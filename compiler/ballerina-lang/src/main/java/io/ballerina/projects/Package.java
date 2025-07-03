@@ -102,11 +102,11 @@ public class Package {
     }
 
     public Project project() {
-        return this.project;
+        return this.packageContext.project();
     }
 
     public Workspace workspace() {
-        return this.workspace;
+        return this.packageContext.workspace();
     }
 
     public PackageId packageId() {

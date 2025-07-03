@@ -403,17 +403,13 @@ public final class ProjectPaths {
             // the filepath does not belong to a package
             return Optional.empty();
         }
-        Optional<Path> workspaceRoot = findWorkspaceRootInner(packageRoot);
-        if (workspaceRoot.isPresent() && isWorkspaceRoot(workspaceRoot.get())) {
-           return workspaceRoot;
-        }
-        return Optional.empty();
+        return findWorkspaceRootInner(packageRoot);
     }
 
     private static Optional<Path> findWorkspaceRootInner(Path filePath) {
         if (filePath != null) {
             filePath = filePath.toAbsolutePath().normalize();
-            if (filePath.resolve(BALLERINA_TOML).toFile().exists()) {
+            if (isWorkspaceRoot(filePath)) {
                 return Optional.of(filePath);
             }
             return findWorkspaceRootInner(filePath.getParent());

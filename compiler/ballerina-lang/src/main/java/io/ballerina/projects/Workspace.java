@@ -60,7 +60,6 @@ public class Workspace {
     private final BuildOptions buildOptions;
     private WorkspaceManifest workspaceManifest;
     private final Map<PackageId, Map<PackageManifest.Tool.Field, ToolContext>> toolContextMap;
-    private final Map<PackageId, Path> sourceRootMap;
     private Environment environment;
 
     /**
@@ -73,7 +72,6 @@ public class Workspace {
         this.workspaceBallerinaToml = WorkspaceBallerinaToml.from(tomlDocument, this);
         this.buildOptions = buildOptions;
         this.workspaceManifest = WorkspaceManifestBuilder.from(tomlDocument, workspaceRoot).manifest();
-        this.sourceRootMap = new HashMap<>();
         this.projectList = new ArrayList<>();
         this.toolContextMap = new HashMap<>();
         loadProjects();
@@ -91,7 +89,6 @@ public class Workspace {
         this.workspaceBallerinaToml = workspaceBallerinaToml;
         this.buildOptions = buildOptions;
         this.projectList = projects;
-        this.sourceRootMap = new HashMap<>();
         this.toolContextMap = toolContextMap;
     }
 
@@ -180,7 +177,6 @@ public class Workspace {
             Path ballerinaTomlPath = packagePath.resolve(BALLERINA_TOML);
             if (Files.exists(ballerinaTomlPath)) {
                 BuildProject project = loadProject(packagePath, environment(), this.buildOptions);
-                this.sourceRootMap.put(project.currentPackage().packageId(), project.sourceRoot());
                 this.projectList.add(project);
             }
         }
@@ -194,10 +190,13 @@ public class Workspace {
     }
 
     public Path sourceRoot(PackageId packageId) {
-        if (this.sourceRootMap.containsKey(packageId)) {
-            return this.sourceRootMap.get(packageId);
-        }
-        throw new ProjectException("Package with ID '" + packageId + "' not found in the workspace");
+        return this.projectList.stream()
+                .filter(project -> project.currentPackage().packageId().equals(packageId))
+                .findFirst()
+                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"))
+                .currentPackage()
+                .project()
+                .sourceRoot();
     }
 
     public DependencyGraph<ResolvedPackageDependency> dependencyGraph() {
@@ -267,7 +266,7 @@ public class Workspace {
                         buildJson.setLastBuildTime(System.currentTimeMillis());
                         Map<String, Long> lastModifiedTime = new HashMap<>();
                         lastModifiedTime.put(pkg.packageName().value(),
-                                FileUtils.lastModifiedTimeOfBalProject(sourceRootMap.get(pkg.packageId())));
+                                FileUtils.lastModifiedTimeOfBalProject(pkg.project().sourceRoot));
                         buildJson.setLastModifiedTime(lastModifiedTime);
 
                         ProjectUtils.writeBuildFile(buildFilePath, buildJson);
@@ -283,7 +282,7 @@ public class Workspace {
     private void writeBuildFile(Package pkg, Path buildFilePath) {
         Map<String, Long> lastModifiedTime = new HashMap<>();
         lastModifiedTime.put(pkg.packageName().value(),
-                FileUtils.lastModifiedTimeOfBalProject(sourceRootMap.get(pkg.packageId())));
+                FileUtils.lastModifiedTimeOfBalProject(pkg.project().sourceRoot));
 
         BuildJson buildJson = new BuildJson(System.currentTimeMillis(), System.currentTimeMillis(),
                 RepoUtils.getBallerinaShortVersion(), lastModifiedTime);
@@ -326,17 +325,24 @@ public class Workspace {
             Project project = oldWorkspace.loadProject(packageConfig.packagePath(), oldWorkspace.environment(),
                     oldWorkspace.buildOptions);
 
-            if (oldWorkspace.sourceRootMap.containsKey(project.currentPackage().packageId())) {
+            if (this.projectsList.stream().anyMatch(prj -> prj.currentPackage().packageId()
+                    .equals(packageConfig.packageId()))) {
                 throw new ProjectException("Package with ID '" + packageConfig.packageId()
-                        + "' already exists in workspace");
+                        + "' already exists in the workspace");
             }
-            project.currentPackage().modify().apply(); // clear the caches
             this.projectsList.add(project);
             return this;
         }
 
         public Modifier removePackage(PackageId packageId) {
-            this.projectsList.removeIf(project -> project.currentPackage().packageId().equals(packageId));
+            Project project = this.projectsList.stream().filter(prj -> prj.currentPackage().packageId()
+                    .equals(packageId)).findFirst().orElseThrow(() -> new ProjectException(
+                    "Package with ID '" + packageId + "' not found in workspace"));
+
+            this.projectsList.remove(project);
+            io.ballerina.projects.environment.PackageCache environmentPackageCache =
+                    oldWorkspace.environment().getService(io.ballerina.projects.environment.PackageCache.class);
+            environmentPackageCache.removePackage(project.currentPackage().packageId());
             return this;
         }
 
