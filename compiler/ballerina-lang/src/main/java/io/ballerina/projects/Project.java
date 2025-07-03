@@ -18,7 +18,6 @@
 package io.ballerina.projects;
 
 import io.ballerina.projects.buildtools.ToolContext;
-import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.environment.ProjectEnvironment;
 import org.wso2.ballerinalang.compiler.util.CompilerContext;
 import org.wso2.ballerinalang.compiler.util.CompilerOptions;

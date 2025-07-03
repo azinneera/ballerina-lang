@@ -20,6 +20,7 @@ package io.ballerina.cli;
 
 import io.ballerina.cli.task.Task;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.Workspace;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -35,9 +36,16 @@ public class TaskExecutor {
     private TaskExecutor() {
     }
 
+    @Deprecated
     public void executeTasks(Project project) {
         for (Task task : tasks) {
             task.execute(project);
+        }
+    }
+
+    public void executeTasks(Workspace workspace) {
+        for (Task task : tasks) {
+            task.execute(workspace);
         }
     }
 

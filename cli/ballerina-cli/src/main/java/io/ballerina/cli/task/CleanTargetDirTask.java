@@ -18,11 +18,16 @@
 
 package io.ballerina.cli.task;
 
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ResolvedPackageDependency;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 
@@ -33,14 +38,16 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
  */
 public class CleanTargetDirTask implements Task {
 
-    private final boolean isPackageModified;
-    private final boolean isCachesEnabled;
+    private boolean isPackageModified;
+    private boolean isCachesEnabled;
 
     public CleanTargetDirTask(boolean isPackageModified,
                               boolean isCachesEnabled) {
         this.isPackageModified = isPackageModified;
         this.isCachesEnabled = isCachesEnabled;
     }
+
+    public CleanTargetDirTask() {}
 
     @Override
     public void execute(Project project) {
@@ -49,6 +56,20 @@ public class CleanTargetDirTask implements Task {
             target.clean(this.isPackageModified, this.isCachesEnabled);
         } catch (IOException | ProjectException e) {
             throw createLauncherException("unable to clean the target directory: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void execute(Workspace workspace) {
+        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                workspace.dependencyGraph().toTopologicallySortedList());
+        for (ResolvedPackageDependency resolvedPackageDependency : topologicallySortedList) {
+            try {
+                Target target = new Target(workspace.target(resolvedPackageDependency.packageId()));
+                target.clean();
+            } catch (IOException | ProjectException e) {
+                throw createLauncherException("unable to clean the target directory: " + e.getMessage());
+            }
         }
     }
 }

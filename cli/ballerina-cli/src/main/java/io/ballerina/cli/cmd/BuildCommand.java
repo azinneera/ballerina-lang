@@ -35,7 +35,7 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
-import io.ballerina.projects.directory.Workspace;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.util.DependencyUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectPaths;
@@ -44,9 +44,6 @@ import picocli.CommandLine;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.BUILD_COMMAND;
@@ -302,26 +299,46 @@ public class BuildCommand implements BLauncherCmd {
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
-        DependencyGraph<ResolvedPackageDependency> packageDependencyGraph = DependencyUtils.getWorkspaceDependencyGraph(workspace);
-        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
-                packageDependencyGraph.toTopologicallySortedList());
-        if (!workspaceRoot.equals(this.projectPath)) {
-            // If the project path is not the workspace root, filter the topologically sorted list to include only
-            // the projects that are dependencies of the project at the specified path.
-            Optional<ResolvedPackageDependency> buildProjectOptional = packageDependencyGraph.getNodes().stream()
-                    .filter(node -> node.packageInstance().project().sourceRoot().equals(this.projectPath.toAbsolutePath())).findFirst();
-            Collection<ResolvedPackageDependency> packageDependencies = packageDependencyGraph.getAllDependencies(
-                    buildProjectOptional.orElseThrow());
-            // remove projects that are not dependencies of the project at the specified path
-            topologicallySortedList.removeIf(pkgNode -> !packageDependencies.contains(pkgNode)
-                    && pkgNode.packageInstance().descriptor().equals(
-                            buildProjectOptional.orElseThrow().packageInstance().descriptor()));
-        }
-        for (ResolvedPackageDependency pkgNode : topologicallySortedList) {
-            boolean hasDependents = !packageDependencyGraph.getAllDependents(pkgNode)
-                    .isEmpty();
-            executeTasks(buildOptions, false, pkgNode.packageInstance().project(), hasDependents);
-        }
+//        DependencyGraph<ResolvedPackageDependency> packageDependencyGraph = DependencyUtils.getWorkspaceDependencyGraph(workspace);
+//        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+//                packageDependencyGraph.toTopologicallySortedList());
+//        if (!workspaceRoot.equals(this.projectPath)) {
+//            // If the project path is not the workspace root, filter the topologically sorted list to include only
+//            // the projects that are dependencies of the project at the specified path.
+//            Optional<ResolvedPackageDependency> buildProjectOptional = packageDependencyGraph.getNodes().stream()
+//                    .filter(node -> node.packageInstance().project().sourceRoot().equals(this.projectPath.toAbsolutePath())).findFirst();
+//            Collection<ResolvedPackageDependency> packageDependencies = packageDependencyGraph.getAllDependencies(
+//                    buildProjectOptional.orElseThrow());
+//            // remove projects that are not dependencies of the project at the specified path
+//            topologicallySortedList.removeIf(pkgNode -> !packageDependencies.contains(pkgNode)
+//                    && pkgNode.packageInstance().descriptor().equals(
+//                            buildProjectOptional.orElseThrow().packageInstance().descriptor()));
+//        }
+//        for (ResolvedPackageDependency pkgNode : topologicallySortedList) {
+//            boolean hasDependents = !packageDependencyGraph.getAllDependents(pkgNode)
+//                    .isEmpty();
+//            executeTasks(buildOptions, false, pkgNode.packageInstance().project(), hasDependents);
+//        }
+        validateGraalVmOption(workspace);
+//        boolean isPackageModified = isProjectUpdated(workspace); // Check package files are modified after last build
+
+        boolean isSingleFileBuild = false;
+        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
+                // clean the target directory(projects only)
+                .addTask(new CleanTargetDirTask(), isSingleFileBuild)
+                // Run build tools
+                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
+                // resolve maven dependencies in Ballerina.toml
+                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
+                // compile the modules
+                .addTask(new CompileTask(outStream, errStream, false, true,
+                        true, buildOptions.enableCache()))
+                .addTask(new CreateExecutableTask(outStream, output, null, false))
+                .addTask(new DumpBuildTimeTask(outStream))
+                .build();
+        taskExecutor.executeTasks(workspace);
+
+
     }
 
     private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
@@ -395,6 +412,16 @@ public class BuildCommand implements BLauncherCmd {
         if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
             this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
                     "flag is not set");
+        }
+    }
+
+    private void validateGraalVmOption(Workspace workspace) {
+        for (Package pkg : workspace.packages()) {
+            if (workspace.buildOptions(pkg.packageId()).nativeImage() &&
+                    !workspace.buildOptions(pkg.packageId()).graalVMBuildOptions().isEmpty()) {
+                this.outStream.println("WARNING: Additional GraalVM build options are ignored for package: " +
+                        pkg.packageId() + "since graalvm flag is not set");
+            }
         }
     }
 

@@ -18,19 +18,7 @@
 package io.ballerina.projects.util;
 
 import io.ballerina.projects.CompilationOptions;
-import io.ballerina.projects.DependencyGraph;
-import io.ballerina.projects.ModuleId;
-import io.ballerina.projects.Package;
-import io.ballerina.projects.PackageDependencyScope;
 import io.ballerina.projects.Project;
-import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
-import io.ballerina.projects.directory.Workspace;
-import io.ballerina.projects.environment.ResolutionOptions;
-import io.ballerina.projects.internal.WorkspaceDependencyGraphBuilder;
-import io.ballerina.projects.internal.repositories.WorkspaceRepository;
-
-import java.util.Collection;
 
 /**
  * Project dependencies related util methods.
@@ -52,30 +40,5 @@ public final class DependencyUtils {
         CompilationOptions.CompilationOptionsBuilder compilationOptionsBuilder = CompilationOptions.builder();
         compilationOptionsBuilder.setOffline(false).setSticky(false);
         project.currentPackage().getResolution(compilationOptionsBuilder.build());
-    }
-
-    public static DependencyGraph<ResolvedPackageDependency> getWorkspaceDependencyGraph(Workspace workspace) {
-        WorkspaceDependencyGraphBuilder graphBuilder = new WorkspaceDependencyGraphBuilder();
-        for (Package pkg : workspace.packages()) {
-
-            Collection<ResolvedPackageDependency> directDependencies = pkg
-                    .getResolution(ResolutionOptions.builder().setOffline(true).build())
-                    .dependencyGraph()
-                    .getDirectDependencies(new ResolvedPackageDependency(pkg, PackageDependencyScope.DEFAULT));
-            addDependencies(pkg, directDependencies, graphBuilder);
-        }
-        return graphBuilder.buildGraph();
-    }
-
-    private static void addDependencies(Package pkg, Collection<ResolvedPackageDependency> directDependencies,
-                                        WorkspaceDependencyGraphBuilder graphBuilder) {
-        for (ResolvedPackageDependency directDependency : directDependencies) {
-            if (directDependency.packageInstance().project().kind() == ProjectKind.BUILD_PROJECT) {
-                graphBuilder.addPackage(pkg);
-                graphBuilder.addDependency(pkg, directDependency.packageInstance());
-                addDependencies(directDependency.packageInstance(), directDependency.packageInstance().getResolution()
-                        .dependencyGraph().getDirectDependencies(directDependency), graphBuilder);
-            }
-        }
     }
 }

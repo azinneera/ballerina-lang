@@ -19,6 +19,7 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.projects.Project;
+import io.ballerina.projects.Workspace;
 
 /**
  * Task interface for executing a task in packaging.
@@ -26,5 +27,12 @@ import io.ballerina.projects.Project;
  * @since 2.0.0
  */
 public interface Task {
-    void execute(Project project);
+    @Deprecated (forRemoval = true)
+    default void execute(Project project) {
+        throw new UnsupportedOperationException("This method is deprecated. Use execute(Workspace workspace) instead.");
+    }
+
+    default void execute(Workspace workspace) {
+
+    }
 }

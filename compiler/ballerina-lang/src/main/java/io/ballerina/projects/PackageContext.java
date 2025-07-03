@@ -19,6 +19,7 @@ package io.ballerina.projects;
 
 import io.ballerina.projects.DependencyGraph.DependencyGraphBuilder;
 import io.ballerina.projects.PackageResolution.DependencyResolution;
+import io.ballerina.projects.environment.ProjectEnvironment;
 import io.ballerina.projects.internal.model.CompilerPluginDescriptor;
 
 import java.util.Collection;
@@ -39,7 +40,9 @@ import java.util.Set;
 class PackageContext {
     private final Map<ModuleId, ModuleContext> moduleContextMap;
     private final Collection<ModuleId> moduleIds;
-    private final Project project;
+    private final ProjectEnvironment projectEnvironment;
+    private Project project;
+    private Workspace workspace;
     private final PackageId packageId;
     private final PackageManifest packageManifest;
     private final DependencyManifest dependencyManifest;
@@ -108,6 +111,47 @@ class PackageContext {
         this.testResourceContextMap = testResourceContextMap;
         this.resourceIds = Collections.unmodifiableCollection(resourceContextMap.keySet());
         this.testResourceIds = Collections.unmodifiableCollection(testResourceContextMap.keySet());
+        this.projectEnvironment = project().projectEnvironmentContext();
+    }
+
+    PackageContext(Workspace workspace,
+                   ProjectEnvironment projectEnvironment,
+                   PackageId packageId,
+                   PackageManifest packageManifest,
+                   DependencyManifest dependencyManifest,
+                   TomlDocumentContext ballerinaTomlContext,
+                   TomlDocumentContext dependenciesTomlContext,
+                   TomlDocumentContext cloudTomlContext,
+                   TomlDocumentContext compilerPluginTomlContext,
+                   TomlDocumentContext balToolTomlContext,
+                   MdDocumentContext readmeMdContext,
+                   CompilationOptions compilationOptions,
+                   Map<ModuleId, ModuleContext> moduleContextMap,
+                   DependencyGraph<PackageDescriptor> pkgDescDependencyGraph,
+                   Map<DocumentId, ResourceContext> resourceContextMap,
+                   Map<DocumentId, ResourceContext> testResourceContextMap) {
+        this.workspace = workspace;
+        this.packageId = packageId;
+        this.packageManifest = packageManifest;
+        this.dependencyManifest = dependencyManifest;
+        this.ballerinaTomlContext = ballerinaTomlContext;
+        this.dependenciesTomlContext = dependenciesTomlContext;
+        this.cloudTomlContext = cloudTomlContext;
+        this.compilerPluginTomlContext = compilerPluginTomlContext;
+        this.balToolTomlContext = balToolTomlContext;
+        this.readmeMdContext = readmeMdContext;
+        this.compilationOptions = compilationOptions;
+        this.moduleIds = Collections.unmodifiableCollection(moduleContextMap.keySet());
+        this.moduleContextMap = moduleContextMap;
+        // TODO Try to reuse previous unaffected compilations
+        this.moduleCompilationMap = new HashMap<>();
+        this.packageDependencies = Collections.emptySet();
+        this.pkgDescDependencyGraph = pkgDescDependencyGraph;
+        this.resourceContextMap = resourceContextMap;
+        this.testResourceContextMap = testResourceContextMap;
+        this.resourceIds = Collections.unmodifiableCollection(resourceContextMap.keySet());
+        this.testResourceIds = Collections.unmodifiableCollection(testResourceContextMap.keySet());
+        this.projectEnvironment = projectEnvironment;
     }
 
     static PackageContext from(Project project, PackageConfig packageConfig, CompilationOptions compilationOptions) {
@@ -135,6 +179,34 @@ class PackageContext {
                           packageConfig.readmeMd().map(MdDocumentContext::from).orElse(null),
                           compilationOptions, moduleContextMap, packageConfig.packageDescDependencyGraph(),
                           resourceContextMap, testResourceContextMap);
+    }
+
+    static PackageContext from(Workspace workspace, ProjectEnvironment projectEnvironment, PackageConfig packageConfig,
+                               CompilationOptions compilationOptions) {
+        Map<ModuleId, ModuleContext> moduleContextMap = new HashMap<>();
+        for (ModuleConfig moduleConfig : packageConfig.otherModules()) {
+            moduleContextMap.put(moduleConfig.moduleId(), ModuleContext.from(workspace, projectEnvironment,
+                    moduleConfig, packageConfig.isSyntaxTreeDisabled()));
+        }
+        Map<DocumentId, ResourceContext> resourceContextMap = new HashMap<>();
+        for (ResourceConfig resourceConfig : packageConfig.resources()) {
+            resourceContextMap.put(resourceConfig.documentId(), ResourceContext.from(resourceConfig));
+        }
+
+        Map<DocumentId, ResourceContext> testResourceContextMap = new HashMap<>();
+        for (ResourceConfig resourceConfig : packageConfig.testResources()) {
+            testResourceContextMap.put(resourceConfig.documentId(), ResourceContext.from(resourceConfig));
+        }
+        return new PackageContext(workspace, projectEnvironment, packageConfig.packageId(), packageConfig.packageManifest(),
+                packageConfig.dependencyManifest(),
+                packageConfig.ballerinaToml().map(TomlDocumentContext::from).orElse(null),
+                packageConfig.dependenciesToml().map(TomlDocumentContext::from).orElse(null),
+                packageConfig.cloudToml().map(TomlDocumentContext::from).orElse(null),
+                packageConfig.compilerPluginToml().map(TomlDocumentContext::from).orElse(null),
+                packageConfig.balToolToml().map(TomlDocumentContext::from).orElse(null),
+                packageConfig.readmeMd().map(MdDocumentContext::from).orElse(null),
+                compilationOptions, moduleContextMap, packageConfig.packageDescDependencyGraph(),
+                resourceContextMap, testResourceContextMap);
     }
 
     PackageId packageId() {

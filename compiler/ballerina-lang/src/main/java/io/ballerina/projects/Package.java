@@ -1,5 +1,6 @@
 package io.ballerina.projects;
 
+import io.ballerina.projects.environment.ProjectEnvironment;
 import io.ballerina.projects.environment.ResolutionOptions;
 import io.ballerina.projects.internal.DefaultDiagnosticResult;
 import io.ballerina.projects.internal.DependencyManifestBuilder;
@@ -32,7 +33,8 @@ import java.util.function.Function;
  * @since 2.0.0
  */
 public class Package {
-    private final Project project;
+    private Project project;
+    private Workspace workspace;
     private final PackageContext packageContext;
     private final Map<ModuleId, Module> moduleMap;
     private final Function<ModuleId, Module> populateModuleFunc;
@@ -60,6 +62,18 @@ public class Package {
                 this.packageContext.resourceContext(documentId), this);
     }
 
+    private Package(PackageContext packageContext, Workspace workspace) {
+        this.packageContext = packageContext;
+        this.workspace = workspace;
+        this.moduleMap = new ConcurrentHashMap<>();
+        this.populateModuleFunc = moduleId -> Module.from(
+                this.packageContext.moduleContext(moduleId), this);
+        this.resources = new ConcurrentHashMap<>();
+        this.testResources = new ConcurrentHashMap<>();
+        this.populateResourceFunc = documentId -> new Resource(
+                this.packageContext.resourceContext(documentId), this);
+    }
+
     static Package from(Project project, PackageConfig packageConfig, CompilationOptions compilationOptions) {
         // TODO create package context here by giving the package config
         // do the same for modules and documents
@@ -71,12 +85,28 @@ public class Package {
         return new Package(packageContext, project);
     }
 
+    static Package from(Workspace workspace, ProjectEnvironment projectEnvironment,
+                        PackageConfig packageConfig, CompilationOptions compilationOptions) {
+        // TODO create package context here by giving the package config
+        // do the same for modules and documents
+        // il. package context creates modules contexts and modules context create document contexts
+
+        // contexts need to hold onto the configs. Should we decouple config from tree information as follows.
+        // package config has the tree information like modules.
+        PackageContext packageContext = PackageContext.from(workspace, projectEnvironment, packageConfig, compilationOptions);
+        return new Package(packageContext, workspace);
+    }
+
     PackageContext packageContext() {
         return this.packageContext;
     }
 
     public Project project() {
         return this.project;
+    }
+
+    public Workspace workspace() {
+        return this.workspace;
     }
 
     public PackageId packageId() {

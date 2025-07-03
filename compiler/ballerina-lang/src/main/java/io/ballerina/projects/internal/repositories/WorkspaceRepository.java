@@ -24,9 +24,8 @@ import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ResolvedPackageDependency;
-import io.ballerina.projects.directory.Workspace;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.environment.ResolutionOptions;
 import io.ballerina.projects.environment.ResolutionRequest;
 

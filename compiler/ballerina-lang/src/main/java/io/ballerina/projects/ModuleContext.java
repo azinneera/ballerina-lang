@@ -79,7 +79,8 @@ class ModuleContext {
     private final Collection<DocumentId> testSrcDocIds;
     private final MdDocumentContext readmeMdContext;
     private final Map<DocumentId, DocumentContext> testDocContextMap;
-    private final Project project;
+    private Project project;
+    private Workspace workspace;
     private final CompilationCache compilationCache;
     private final List<ModuleDescriptor> moduleDescDependencies;
 
@@ -117,6 +118,29 @@ class ModuleContext {
         this.compilationCache = projectEnvironment.getService(CompilationCache.class);
     }
 
+    ModuleContext(Workspace workspace,
+                  ProjectEnvironment projectEnvironment,
+                  ModuleId moduleId,
+                  ModuleDescriptor moduleDescriptor,
+                  boolean isDefaultModule,
+                  Map<DocumentId, DocumentContext> srcDocContextMap,
+                  Map<DocumentId, DocumentContext> testDocContextMap,
+                  MdDocumentContext readmeMd,
+                  List<ModuleDescriptor> moduleDescDependencies) {
+        this.workspace = workspace;
+        this.moduleId = moduleId;
+        this.moduleDescriptor = moduleDescriptor;
+        this.isDefaultModule = isDefaultModule;
+        this.srcDocContextMap = srcDocContextMap;
+        this.srcDocIds = Collections.unmodifiableCollection(srcDocContextMap.keySet());
+        this.testDocContextMap = testDocContextMap;
+        this.testSrcDocIds = Collections.unmodifiableCollection(testDocContextMap.keySet());
+        this.readmeMdContext = readmeMd;
+        this.moduleDescDependencies = Collections.unmodifiableList(moduleDescDependencies);
+        this.bootstrap = new Bootstrap(projectEnvironment.getService(PackageResolver.class));
+        this.compilationCache = projectEnvironment.getService(CompilationCache.class);
+    }
+
     static ModuleContext from(Project project, ModuleConfig moduleConfig, boolean disableSyntaxTree) {
         Map<DocumentId, DocumentContext> srcDocContextMap = new LinkedHashMap<>();
         for (DocumentConfig sourceDocConfig : moduleConfig.sourceDocs()) {
@@ -131,6 +155,26 @@ class ModuleContext {
         }
 
         return new ModuleContext(project, moduleConfig.moduleId(), moduleConfig.moduleDescriptor(),
+                moduleConfig.isDefaultModule(), srcDocContextMap, testDocContextMap,
+                moduleConfig.readmeMd().map(c ->MdDocumentContext.from(c)).orElse(null),
+                moduleConfig.dependencies());
+    }
+
+    static ModuleContext from(Workspace workspace, ProjectEnvironment projectEnvironment,
+                              ModuleConfig moduleConfig, boolean disableSyntaxTree) {
+        Map<DocumentId, DocumentContext> srcDocContextMap = new LinkedHashMap<>();
+        for (DocumentConfig sourceDocConfig : moduleConfig.sourceDocs()) {
+            srcDocContextMap.put(sourceDocConfig.documentId(), DocumentContext.from(sourceDocConfig,
+                    disableSyntaxTree));
+        }
+
+        Map<DocumentId, DocumentContext> testDocContextMap = new LinkedHashMap<>();
+        for (DocumentConfig testSrcDocConfig : moduleConfig.testSourceDocs()) {
+            testDocContextMap.put(testSrcDocConfig.documentId(), DocumentContext.from(testSrcDocConfig,
+                    disableSyntaxTree));
+        }
+
+        return new ModuleContext(workspace, projectEnvironment, moduleConfig.moduleId(), moduleConfig.moduleDescriptor(),
                 moduleConfig.isDefaultModule(), srcDocContextMap, testDocContextMap,
                 moduleConfig.readmeMd().map(c ->MdDocumentContext.from(c)).orElse(null),
                 moduleConfig.dependencies());

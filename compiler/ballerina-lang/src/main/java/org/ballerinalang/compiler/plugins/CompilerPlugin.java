@@ -17,6 +17,7 @@
  */
 package org.ballerinalang.compiler.plugins;
 
+import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.tools.diagnostics.Diagnostic;
@@ -153,6 +154,16 @@ public interface CompilerPlugin {
      * @param target Target directory
      */
     default void codeGenerated(Project project, Target target) {
+
+    }
+
+    /**
+     * Notifies when the code generated phase is completed.
+     *
+     * @param pkg Package instance
+     * @param target Target directory
+     */
+    default void codeGenerated(Package pkg, Target target) {
 
     }
 

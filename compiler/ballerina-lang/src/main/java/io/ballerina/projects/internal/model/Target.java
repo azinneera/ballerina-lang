@@ -19,6 +19,7 @@ package io.ballerina.projects.internal.model;
 
 import io.ballerina.projects.Module;
 import io.ballerina.projects.Package;
+import io.ballerina.projects.Project;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectUtils;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
@@ -242,6 +243,7 @@ public class Target {
     /**
      * Clean any files that created from the build.
      */
+    @Deprecated (forRemoval = true)
     public void clean(boolean isModified, boolean cacheEnabled) {
         if (isModified || !cacheEnabled) {
             // Remove from cache
@@ -254,6 +256,10 @@ public class Target {
         ProjectUtils.deleteDirectory(this.docPath);
         ProjectUtils.deleteDirectory(this.reportPath);
         ProjectUtils.deleteDirectory(this.resourcesPath);
+    }
+
+    public void clean() {
+        ProjectUtils.deleteDirectory(this.targetPath);
     }
 
     /**

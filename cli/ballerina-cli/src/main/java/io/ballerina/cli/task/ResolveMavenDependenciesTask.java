@@ -19,14 +19,19 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.projects.JvmTarget;
+import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.ResolvedPackageDependency;
+import io.ballerina.projects.Workspace;
 import org.ballerinalang.maven.Dependency;
 import org.ballerinalang.maven.MavenResolver;
 import org.ballerinalang.maven.Utils;
 import org.ballerinalang.maven.exceptions.MavenResolverException;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,11 +50,21 @@ public class ResolveMavenDependenciesTask implements Task {
 
     @Override
     public void execute(Project project) {
+        execute(project.currentPackage(), project.targetDir());
+    }
+    @Override
+    public void execute(Workspace workspace) {
+        for (ResolvedPackageDependency packageDependency : workspace.dependencyGraph().toTopologicallySortedList()) {
+            execute(packageDependency.packageInstance(), workspace.target(packageDependency.packageId()));
+        }
+    }
+
+    public void execute(Package pkg, Path target) {
         List<Map<String, Object>> platformLibraries = new ArrayList<>();
         List<Map<String, Object>> platformRepositories = new ArrayList<>();
-        PackageManifest.Platform platform = null;
+        PackageManifest.Platform platform;
         for (JvmTarget jvmTarget : JvmTarget.values()) {
-            platform = project.currentPackage().manifest().platform(jvmTarget.code());
+            platform = pkg.manifest().platform(jvmTarget.code());
             if (platform != null) {
                 platformLibraries.addAll(platform.dependencies());
                 platformRepositories.addAll(platform.repositories());
@@ -62,7 +77,7 @@ public class ResolveMavenDependenciesTask implements Task {
         List<Map<String, Object>> mavenCustomRepos = new ArrayList<>();
         List<Map<String, Object>> mavenDependencies = new ArrayList<>();
 
-        String targetRepo = project.sourceRoot().resolve("target").resolve("platform-libs").toAbsolutePath().toString();
+        String targetRepo = target.resolve("platform-libs").toAbsolutePath().toString();
         MavenResolver resolver = new MavenResolver(targetRepo);
 
         for (Map<String, Object> repository : platformRepositories) {

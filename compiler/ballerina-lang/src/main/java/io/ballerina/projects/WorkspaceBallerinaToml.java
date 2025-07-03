@@ -17,7 +17,6 @@
  */
 package io.ballerina.projects;
 
-import io.ballerina.projects.directory.Workspace;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.toml.semantic.ast.TomlTableNode;
 

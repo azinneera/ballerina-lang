@@ -20,8 +20,12 @@ package io.ballerina.cli.task;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.ballerina.cli.utils.BuildTime;
+import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.ResolvedPackageDependency;
+import io.ballerina.projects.Workspace;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -49,15 +53,28 @@ public class DumpBuildTimeTask implements Task {
     }
 
     @Override
-    public void execute(Project project) {
-        if (project.buildOptions().dumpBuildTime()) {
-            BuildTime.getInstance().totalDuration = System.currentTimeMillis() - BuildTime.getInstance().timestamp;
-            BuildTime.getInstance().offline = project.buildOptions().offlineBuild();
-            Path buildTimeFile = getBuildTimeFilePath(project);
-            Path buildTimeFileRelativePath = Path.of(System.getProperty("user.dir")).relativize(buildTimeFile);
-            this.out.println("\nDumping build time information\n\t" + buildTimeFileRelativePath);
-            persistBuildTimeToFile(buildTimeFile);
+    public void execute(Workspace workspace) {
+        for (ResolvedPackageDependency packageDependency : workspace.dependencyGraph().toTopologicallySortedList()) {
+            execute(workspace.getPackage(packageDependency.packageId()),
+                    workspace.buildOptions(packageDependency.packageId()));
         }
+    }
+
+    @Override
+    public void execute(Project project) {
+        execute(project.currentPackage(), project.buildOptions());
+    }
+
+    private void execute(Package pkg, BuildOptions buildOptions) {
+        if (!buildOptions.dumpBuildTime()) {
+            return;
+        }
+        BuildTime.getInstance().totalDuration = System.currentTimeMillis() - BuildTime.getInstance().timestamp;
+        BuildTime.getInstance().offline = buildOptions.offlineBuild();
+        Path buildTimeFile = getBuildTimeFilePath(pkg);
+        Path buildTimeFileRelativePath = Path.of(System.getProperty("user.dir")).relativize(buildTimeFile);
+        this.out.println("\nDumping build time information\n\t" + buildTimeFileRelativePath);
+        persistBuildTimeToFile(buildTimeFile);
     }
 
     private void persistBuildTimeToFile(Path filepath) {
@@ -77,11 +94,11 @@ public class DumpBuildTimeTask implements Task {
         }
     }
 
-    private Path getBuildTimeFilePath(Project project) {
-        if (project.kind().equals(ProjectKind.BUILD_PROJECT)) {
-            return project.targetDir().resolve(BUILD_TIME_JSON).toAbsolutePath();
+    private Path getBuildTimeFilePath(Package pkg) {
+        if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_FILE)) {
+            return currentDir.resolve(BUILD_TIME_JSON).toAbsolutePath();
         }
-        return currentDir.resolve(BUILD_TIME_JSON).toAbsolutePath();
+        return pkg.workspace().target(pkg.packageId()).resolve(BUILD_TIME_JSON).toAbsolutePath();
     }
 
     private void printBuildTime(BuildTime buildTime) {

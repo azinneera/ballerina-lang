@@ -18,7 +18,7 @@
 package io.ballerina.projects.environment;
 
 import io.ballerina.projects.CompilerPluginCache;
-import io.ballerina.projects.directory.Workspace;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.environment.BallerinaDistribution;
 import io.ballerina.projects.internal.environment.BallerinaUserHome;
 import io.ballerina.projects.internal.environment.DefaultEnvironment;

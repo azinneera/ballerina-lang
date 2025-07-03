@@ -19,18 +19,22 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.cli.utils.BuildTime;
+import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.CodeGeneratorResult;
 import io.ballerina.projects.CodeModifierResult;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageResolution;
 import io.ballerina.projects.PlatformLibraryScope;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
-import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.SemanticVersion;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.environment.ResolutionOptions;
 import io.ballerina.projects.internal.PackageDiagnostic;
@@ -67,6 +71,8 @@ public class CompileTask implements Task {
     private final boolean compileForBalBuild;
     private final boolean isPackageModified;
     private final boolean cachesEnabled;
+    private long start = 0;
+    List<Diagnostic> diagnostics = new ArrayList<>();
 
     public CompileTask(PrintStream out, PrintStream err) {
         this(out, err, false, false, true, false);
@@ -88,194 +94,262 @@ public class CompileTask implements Task {
 
     @Override
     public void execute(Project project) {
-        if (ProjectUtils.isProjectEmpty(project) && skipCompilationForBalPack(project)) {
-            throw createLauncherException("package is empty. Please add at least one .bal file.");
-        }
-        this.out.println("Compiling source");
-
-        String sourceName;
-        if (project instanceof SingleFileProject) {
-            sourceName = project.currentPackage().getDefaultModule().document(
-                    project.currentPackage().getDefaultModule().documentIds().iterator().next()).name();
-        } else {
-            sourceName = project.currentPackage().packageOrg().toString() + "/" +
-                    project.currentPackage().packageName().toString() + ":" +
-                    project.currentPackage().packageVersion();
-        }
-        // Print the source
-        this.out.println("\t" + sourceName);
-
-        System.setProperty(CentralClientConstants.ENABLE_OUTPUT_STREAM, "true");
-
         try {
-            printWarningForHigherDistribution(project);
-            List<Diagnostic> diagnostics = new ArrayList<>();
-            if (this.compileForBalBuild) {
-                addDiagnosticForProvidedPlatformLibs(project, diagnostics);
-            }
-            long start = 0;
-
-            if (project.currentPackage().compilationOptions().dumpGraph()
-                    || project.currentPackage().compilationOptions().dumpRawGraphs()) {
-                this.out.println();
-                this.out.println("Resolving dependencies");
-            }
-
-            if (project.buildOptions().dumpBuildTime()) {
-                start = System.currentTimeMillis();
-            }
+            // Print the source
+            printPackageInfoForProject(project.currentPackage());
+            // Validate the source
+            validateProject(project.currentPackage());
+            // Get the package resolution
+            PackageResolution packageResolution = getResolution(project.currentPackage(), project.buildOptions());
             Set<String> packageImports = ProjectUtils.getPackageImports(project.currentPackage());
-            PackageResolution packageResolution = project.currentPackage().getResolution();
-            if (project.buildOptions().dumpBuildTime()) {
-                BuildTime.getInstance().packageResolutionDuration = System.currentTimeMillis() - start;
+
+            // Run code generator and modifier plugins
+            if (!packageResolution.diagnosticResult().hasErrors()) {
+                runCodeGenerators(project.currentPackage(), project.buildOptions(),
+                        project.currentPackage().workspace().kind());
+                runCodeModifiers(project.currentPackage(), project.buildOptions(),
+                        project.currentPackage().workspace().kind());
             }
 
-            if (project.currentPackage().compilationOptions().dumpRawGraphs()) {
-                packageResolution.dumpGraphs(out);
-            }
-
-            if (project.buildOptions().dumpBuildTime()) {
-                BuildTime.getInstance().codeGeneratorPluginDuration = 0;
-                BuildTime.getInstance().codeModifierPluginDuration = 0;
-                start = System.currentTimeMillis();
-            }
-
-            // run built-in code generator compiler plugins
-            // We only continue with next steps if package resolution does not have errors.
-            // Errors in package resolution denotes version incompatibility errors. Hence, we do not continue further.
-            if (!project.currentPackage().getResolution().diagnosticResult().hasErrors()) {
-                if (!project.kind().equals(ProjectKind.BALA_PROJECT)) {
-                    // BalaProject is a read-only project.
-                    // Hence, we run the code generators/ modifiers only for BuildProject and SingleFileProject
-
-                    if (!project.kind().equals(ProjectKind.BALA_PROJECT) && !isPackCmdForATemplatePkg(project)) {
-                        // SingleFileProject cannot hold additional sources or resources
-                        // and BalaProjects is a read-only project.r
-                        // Hence, we run the code generators only for BuildProject.
-                        if (this.isPackageModified || !this.cachesEnabled) {
-                            // Run code gen and modify plugins, if project has updated only
-                            CodeGeneratorResult codeGeneratorResult = project.currentPackage()
-                                    .runCodeGeneratorPlugins();
-                            diagnostics.addAll(codeGeneratorResult.reportedDiagnostics().diagnostics());
-                            if (project.buildOptions().dumpBuildTime()) {
-                                BuildTime.getInstance().codeGeneratorPluginDuration =
-                                        System.currentTimeMillis() - start;
-                                start = System.currentTimeMillis();
-                            }
-                            CodeModifierResult codeModifierResult = project.currentPackage()
-                                    .runCodeModifierPlugins();
-                            diagnostics.addAll(codeModifierResult.reportedDiagnostics().diagnostics());
-                            if (project.buildOptions().dumpBuildTime()) {
-                                BuildTime.getInstance().codeModifierPluginDuration =
-                                        System.currentTimeMillis() - start;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // We dump the raw graphs twice only if code generator/modifier plugins are engaged
-            // since the package has changed now
-
-            Set<String> newPackageImports = ProjectUtils.getPackageImports(project.currentPackage());
-            ResolutionOptions resolutionOptions = ResolutionOptions.builder().setOffline(true).build();
-            if (!packageImports.equals(newPackageImports)) {
-                resolutionOptions = ResolutionOptions.builder().setOffline(false).build();
-            }
-
-            if (packageResolution != project.currentPackage().getResolution(resolutionOptions)) {
-                packageResolution = project.currentPackage().getResolution();
-                if (project.currentPackage().compilationOptions().dumpRawGraphs()) {
-                    packageResolution.dumpGraphs(out);
-                }
-            }
-            if (project.currentPackage().compilationOptions().dumpGraph()) {
-                packageResolution.dumpGraphs(out);
-            }
-
-            // Print diagnostics and exit when version incompatibility issues are found in package resolution.
-            if (project.currentPackage().getResolution().diagnosticResult().hasErrors()) {
-                // add resolution diagnostics
-                diagnostics.addAll(project.currentPackage().getResolution().diagnosticResult().diagnostics());
-                // add package manifest diagnostics
-                diagnostics.addAll(project.currentPackage().manifest().diagnostics().diagnostics());
-                // add dependency manifest diagnostics
-                diagnostics.addAll(project.currentPackage().dependencyManifest().diagnostics().diagnostics());
-                diagnostics.forEach(d -> {
-                    if (!d.diagnosticInfo().code().startsWith(TOOL_DIAGNOSTIC_CODE_PREFIX)) {
-                        err.println(d);
-                    }
-                });
-                throw createLauncherException("package resolution contains errors");
-            }
-
-            // Add corrupted dependencies toml diagnostic
-            project.currentPackage().dependencyManifest().diagnostics().diagnostics().forEach(diagnostic -> {
-                if (diagnostic.diagnosticInfo().code().equals(CORRUPTED_DEPENDENCIES_TOML.diagnosticId())) {
-                    diagnostics.add(diagnostic);
-                }
-            });
-
-            // Package resolution is successful. Continue compiling the package.
-            if (project.buildOptions().dumpBuildTime()) {
-                start = System.currentTimeMillis();
-            }
-
-            Optional<Diagnostic> projectLoadingDiagnostic = ProjectUtils.getProjectLoadingDiagnostic().stream().filter(
-                    diagnostic -> diagnostic.diagnosticInfo().code().equals(
-                            ProjectDiagnosticErrorCode.DEPRECATED_RESOURCES_STRUCTURE.diagnosticId())).findAny();
-
-            projectLoadingDiagnostic.ifPresent(out::println);
-            PackageCompilation packageCompilation = project.currentPackage().getCompilation();
-            if (project.buildOptions().dumpBuildTime()) {
-                BuildTime.getInstance().packageCompilationDuration = System.currentTimeMillis() - start;
-                start = System.currentTimeMillis();
-            }
-            JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(packageCompilation, JvmTarget.JAVA_21);
-            if (project.buildOptions().dumpBuildTime()) {
-                BuildTime.getInstance().codeGenDuration = System.currentTimeMillis() - start;
-            }
-
-            // Report package compilation and backend diagnostics
-            diagnostics.addAll(jBallerinaBackend.diagnosticResult().diagnostics(false));
-            diagnostics.forEach(d -> {
-                if (d.diagnosticInfo().code() == null || (!d.diagnosticInfo().code().equals(
-                        ProjectDiagnosticErrorCode.BUILT_WITH_OLDER_SL_UPDATE_DISTRIBUTION.diagnosticId()) &&
-                        !d.diagnosticInfo().code().startsWith(TOOL_DIAGNOSTIC_CODE_PREFIX))) {
-                    err.println(d);
-                }
-            });
-            // Add tool resolution diagnostics to diagnostics
-            diagnostics.addAll(project.currentPackage().getBuildToolResolution().getDiagnosticList());
-            boolean hasErrors = false;
-            for (Diagnostic d : diagnostics) {
-                if (d.diagnosticInfo().severity().equals(DiagnosticSeverity.ERROR)) {
-                    hasErrors = true;
-                }
-            }
-            if (hasErrors) {
-                throw createLauncherException("compilation contains errors");
-            }
-            project.save();
+            // Dump the package dependency graphs if required
+            dumpRawGraphsIfRequired(project.currentPackage(), packageResolution, packageImports);
+            // Report resolution diagnostics
+            reportResolutionDiagnostics(project.currentPackage());
+            // Compile the package
+            getCompilationAndSave(project.currentPackage(), project.buildOptions());
         } catch (ProjectException e) {
             throw createLauncherException("compilation failed: " + e.getMessage());
         }
     }
 
-    private boolean isPackCmdForATemplatePkg(Project project) {
-        return compileForBalPack && project.currentPackage().manifest().template();
+    @Override
+    public void execute(Workspace workspace) {
+        try {
+            List<ResolvedPackageDependency> topologicallySortedList =
+                    workspace.dependencyGraph().toTopologicallySortedList();
+            for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
+                PackageId packageId = packageDependency.packageId();
+                // Print the source
+                printPackageInfoForProject(workspace.getPackage(packageId));
+                // Validate the source
+                validateProject(workspace.getPackage(packageId));
+                // Get the package resolution
+                PackageResolution packageResolution = getResolution(workspace.getPackage(packageId),
+                        workspace.buildOptions(packageId));
+                Set<String> packageImports = ProjectUtils.getPackageImports(workspace.getPackage(packageId));
+
+                // Run code generator and modifier plugins
+                if (!packageResolution.diagnosticResult().hasErrors()) {
+                    runCodeGenerators(workspace.getPackage(packageId), workspace.buildOptions(packageId),
+                            workspace.kind());
+                    runCodeModifiers(workspace.getPackage(packageId), workspace.buildOptions(packageId),
+                            workspace.kind());
+                }
+
+                // Dump the package dependency graphs if required
+                dumpRawGraphsIfRequired(workspace.getPackage(packageId), packageResolution, packageImports);
+                // Report resolution diagnostics
+                reportResolutionDiagnostics(workspace.getPackage(packageId));
+
+                // Compile the package
+                getCompilationAndSave(workspace.getPackage(packageId), workspace.buildOptions(packageId));
+            }
+        } catch (ProjectException e) {
+            throw createLauncherException("compilation failed: " + e.getMessage());
+        }
+    }
+
+    private void printPackageInfoForProject(Package pkg) {
+        String sourceName;
+        if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_PACKAGE)) {
+            sourceName = pkg.getDefaultModule().document(
+                    pkg.getDefaultModule().documentIds().iterator().next()).name();
+        } else {
+            sourceName = pkg.packageOrg().toString() + "/" +
+                    pkg.packageName().toString() + ":" +
+                    pkg.packageVersion();
+        }
+        this.out.println("Compiling source");
+        this.out.println("\t" + sourceName);
+    }
+
+    private void dumpRawGraphsIfRequired(Package pkg, PackageResolution packageResolution, Set<String> packageImports) {
+        // We dump the raw graphs twice only if code generator/modifier plugins are engaged
+        // since the package has changed now
+        Set<String> newPackageImports = ProjectUtils.getPackageImports(pkg);
+        ResolutionOptions resolutionOptions = ResolutionOptions.builder().setOffline(true).build();
+        if (!packageImports.equals(newPackageImports)) {
+            resolutionOptions = ResolutionOptions.builder().setOffline(false).build();
+        }
+        if (packageResolution != pkg.getResolution(resolutionOptions)) {
+            packageResolution = pkg.getResolution();
+            if (pkg.compilationOptions().dumpRawGraphs()) {
+                packageResolution.dumpGraphs(out);
+            }
+        }
+        if (pkg.compilationOptions().dumpGraph()) {
+            packageResolution.dumpGraphs(out);
+        }
+    }
+
+    private void getCompilationAndSave(Package pkg, BuildOptions buildOptions) {
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+        }
+
+        Optional<Diagnostic> projectLoadingDiagnostic = ProjectUtils.getProjectLoadingDiagnostic().stream().filter(
+                diagnostic -> diagnostic.diagnosticInfo().code().equals(
+                        ProjectDiagnosticErrorCode.DEPRECATED_RESOURCES_STRUCTURE.diagnosticId())).findAny();
+
+        projectLoadingDiagnostic.ifPresent(out::println);
+        PackageCompilation packageCompilation = pkg.getCompilation();
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().packageCompilationDuration = System.currentTimeMillis() - start;
+            start = System.currentTimeMillis();
+        }
+        JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(packageCompilation, JvmTarget.JAVA_21);
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().codeGenDuration = System.currentTimeMillis() - start;
+        }
+
+        // Report package compilation and backend diagnostics
+        diagnostics.addAll(jBallerinaBackend.diagnosticResult().diagnostics(false));
+        diagnostics.forEach(d -> {
+            if (d.diagnosticInfo().code() == null || (!d.diagnosticInfo().code().equals(
+                    ProjectDiagnosticErrorCode.BUILT_WITH_OLDER_SL_UPDATE_DISTRIBUTION.diagnosticId()) &&
+                    !d.diagnosticInfo().code().startsWith(TOOL_DIAGNOSTIC_CODE_PREFIX))) {
+                err.println(d);
+            }
+        });
+
+        // Add tool resolution diagnostics to diagnostics
+        diagnostics.addAll(pkg.getBuildToolResolution().getDiagnosticList());
+        boolean hasErrors = false;
+        for (Diagnostic d : diagnostics) {
+            if (d.diagnosticInfo().severity().equals(DiagnosticSeverity.ERROR)) {
+                hasErrors = true;
+            }
+        }
+        if (hasErrors) {
+            throw createLauncherException("compilation contains errors");
+        }
+        pkg.workspace().save();
+    }
+
+    private void reportResolutionDiagnostics(Package pkg) {
+        // Print diagnostics and exit when version incompatibility issues are found in package resolution.
+        if (pkg.getResolution().diagnosticResult().hasErrors()) {
+            // add resolution diagnostics
+            diagnostics.addAll(pkg.getResolution().diagnosticResult().diagnostics());
+            // add package manifest diagnostics
+            diagnostics.addAll(pkg.manifest().diagnostics().diagnostics());
+            // add dependency manifest diagnostics
+            diagnostics.addAll(pkg.dependencyManifest().diagnostics().diagnostics());
+            diagnostics.forEach(d -> {
+                if (!d.diagnosticInfo().code().startsWith(TOOL_DIAGNOSTIC_CODE_PREFIX)) {
+                    err.println(d);
+                }
+            });
+            throw createLauncherException("package resolution contains errors");
+        }
+
+        // Add corrupted dependencies toml diagnostic
+        pkg.dependencyManifest().diagnostics().diagnostics().forEach(diagnostic -> {
+            if (diagnostic.diagnosticInfo().code().equals(CORRUPTED_DEPENDENCIES_TOML.diagnosticId())) {
+                diagnostics.add(diagnostic);
+            }
+        });
+    }
+
+    private void validateProject(Package pkg) {
+        if (ProjectUtils.isPackageEmpty(pkg) && skipCompilationForBalPack(pkg)) {
+            throw createLauncherException("package is empty. Please add at least one .bal file.");
+        }
+    }
+
+    private boolean isPackCmdForATemplatePkg(Package pkg) {
+        return compileForBalPack && pkg.manifest().template();
+    }
+
+    private PackageResolution getResolution(Package pkg, BuildOptions buildOptions) {
+        System.setProperty(CentralClientConstants.ENABLE_OUTPUT_STREAM, "true");
+        printWarningForHigherDistribution(pkg, buildOptions);
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        if (this.compileForBalBuild) {
+            addDiagnosticForProvidedPlatformLibs(pkg, diagnostics);
+        }
+
+        if (pkg.compilationOptions().dumpGraph()
+                || pkg.compilationOptions().dumpRawGraphs()) {
+            this.out.println();
+            this.out.println("Resolving dependencies");
+        }
+
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+        }
+        PackageResolution packageResolution = pkg.getResolution();
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().packageResolutionDuration = System.currentTimeMillis() - start;
+        }
+
+        if (pkg.compilationOptions().dumpRawGraphs()) {
+            packageResolution.dumpGraphs(out);
+        }
+
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().codeGeneratorPluginDuration = 0;
+            BuildTime.getInstance().codeModifierPluginDuration = 0;
+            start = System.currentTimeMillis();
+        }
+        return packageResolution;
+    }
+
+    private void runCodeGenerators(Package pkg, BuildOptions buildOptions, Workspace.Kind workspaceKind) {
+        if (workspaceKind.equals(Workspace.Kind.BALA) || workspaceKind.equals(Workspace.Kind.SINGLE_FILE) ||
+                isPackCmdForATemplatePkg(pkg)) {
+            return;
+        }
+
+        if (!this.isPackageModified && this.cachesEnabled) {
+            return;
+        }
+        CodeGeneratorResult codeGeneratorResult = pkg.runCodeGeneratorPlugins();
+        diagnostics.addAll(codeGeneratorResult.reportedDiagnostics().diagnostics());
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().codeGeneratorPluginDuration =
+                    System.currentTimeMillis() - start;
+            start = System.currentTimeMillis();
+        }
+    }
+
+    private void runCodeModifiers(Package pkg, BuildOptions buildOptions, Workspace.Kind workspaceKind) {
+        if (workspaceKind.equals(Workspace.Kind.BALA) || workspaceKind.equals(Workspace.Kind.SINGLE_FILE) ||
+                isPackCmdForATemplatePkg(pkg)) {
+            return;
+        }
+
+        if (!this.isPackageModified && this.cachesEnabled) {
+            return;
+        }
+        CodeModifierResult codeModifierResult = pkg.runCodeModifierPlugins();
+        diagnostics.addAll(codeModifierResult.reportedDiagnostics().diagnostics());
+        if (buildOptions.dumpBuildTime()) {
+            BuildTime.getInstance().codeModifierPluginDuration =
+                    System.currentTimeMillis() - start;
+        }
     }
 
     /**
      * Prints the warning that explains the dependency update due to the detection of a new distribution.
      *
-     * @param project project instance
+     * @param pkg package instance
      */
-    private void printWarningForHigherDistribution(Project project) {
-        SemanticVersion prevDistributionVersion = project.currentPackage().dependencyManifest().distributionVersion();
+    private void printWarningForHigherDistribution(Package pkg, BuildOptions buildOptions) {
+        SemanticVersion prevDistributionVersion = pkg.dependencyManifest().distributionVersion();
         SemanticVersion currentDistributionVersion = SemanticVersion.from(RepoUtils.getBallerinaShortVersion());
 
-        if (project.currentPackage().dependencyManifest().dependenciesTomlVersion() != null) {
+        if (pkg.dependencyManifest().dependenciesTomlVersion() != null) {
             String currentVersionForDiagnostic = String.valueOf(currentDistributionVersion.minor());
             if (currentDistributionVersion.patch() != 0) {
                 currentVersionForDiagnostic += DOT + currentDistributionVersion.patch();
@@ -297,7 +371,7 @@ public class CompileTask implements Task {
                 warning = "Detected an attempt to compile this package using Swan Lake Update "
                         + currentVersionForDiagnostic +
                         ". However, this package was built using Swan Lake Update " + prevVersionForDiagnostic + ".";
-                if (project.buildOptions().sticky()) {
+                if (buildOptions.sticky()) {
                     warning += "\nHINT: Execute the bal command with --sticky=false";
                 } else {
                     warning += " To ensure compatibility, the Dependencies.toml file will be updated with the " +
@@ -309,14 +383,14 @@ public class CompileTask implements Task {
                         ProjectDiagnosticErrorCode.BUILT_WITH_OLDER_SL_UPDATE_DISTRIBUTION.diagnosticId(),
                         warning, DiagnosticSeverity.WARNING);
                 PackageDiagnostic diagnostic = new PackageDiagnostic(diagnosticInfo,
-                        project.currentPackage().descriptor().name().toString());
+                        pkg.descriptor().name().toString());
                 err.println(diagnostic);
             }
         }
     }
 
-    private void addDiagnosticForProvidedPlatformLibs(Project project, List<Diagnostic> diagnostics) {
-        Map<String, PackageManifest.Platform> platforms = project.currentPackage().manifest().platforms();
+    private void addDiagnosticForProvidedPlatformLibs(Package pkg, List<Diagnostic> diagnostics) {
+        Map<String, PackageManifest.Platform> platforms = pkg.manifest().platforms();
         for (PackageManifest.Platform javaPlatform : platforms.values()) {
             if (javaPlatform == null || javaPlatform.dependencies().isEmpty()) {
                 continue;
@@ -328,8 +402,7 @@ public class CompileTask implements Task {
                             String.format("'%s' scope for platform dependencies is not allowed with package build%n",
                                     PlatformLibraryScope.PROVIDED.getStringValue()),
                             DiagnosticSeverity.ERROR);
-                    diagnostics.add(new PackageDiagnostic(diagnosticInfo,
-                            project.currentPackage().descriptor().name().toString()));
+                    diagnostics.add(new PackageDiagnostic(diagnosticInfo, pkg.descriptor().name().toString()));
                     return;
                 }
             }
@@ -340,11 +413,10 @@ public class CompileTask implements Task {
      * If CompileTask is triggered by `bal pack` command, and project does not have CompilerPlugin.toml or BalTool.toml,
      * skip the compilation if project is empty. The project should be evaluated for emptiness before calling this.
      *
-     * @param project project instance
+     * @param pkg package instance
      * @return true if compilation should be skipped, false otherwise
      */
-    private boolean skipCompilationForBalPack(Project project) {
-        return (!compileForBalPack || project.currentPackage().compilerPluginToml().isEmpty() &&
-                project.currentPackage().balToolToml().isEmpty());
+    private boolean skipCompilationForBalPack(Package pkg) {
+        return (!compileForBalPack || pkg.compilerPluginToml().isEmpty() && pkg.balToolToml().isEmpty());
     }
 }
