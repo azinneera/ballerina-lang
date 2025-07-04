@@ -24,8 +24,10 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
+import io.ballerina.projects.util.ProjectUtils;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,6 +40,7 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
  */
 public class CleanTargetDirTask implements Task {
 
+    private final Path absProjectPath;
     private boolean isPackageModified;
     private boolean isCachesEnabled;
 
@@ -45,9 +48,16 @@ public class CleanTargetDirTask implements Task {
                               boolean isCachesEnabled) {
         this.isPackageModified = isPackageModified;
         this.isCachesEnabled = isCachesEnabled;
+        this.absProjectPath = null;
     }
 
-    public CleanTargetDirTask() {}
+    public CleanTargetDirTask() {
+        this.absProjectPath = null;
+    }
+
+    public CleanTargetDirTask(Path absProjectPath) {
+        this.absProjectPath = absProjectPath;
+    }
 
     @Override
     public void execute(Project project) {
@@ -61,11 +71,21 @@ public class CleanTargetDirTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
+        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
         List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
-                workspace.dependencyGraph().toTopologicallySortedList());
+                dependencyGraph.toTopologicallySortedList());
+        if (this.absProjectPath != null) {
+            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
+                    dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                            .equals(this.absProjectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                            && !pkg.equals(packageDependency));
+        }
         for (ResolvedPackageDependency resolvedPackageDependency : topologicallySortedList) {
             try {
-                Target target = new Target(workspace.target(resolvedPackageDependency.packageId()));
+                Target target = new Target(workspace.target(resolvedPackageDependency.packageInstance().descriptor()));
                 target.clean();
             } catch (IOException | ProjectException e) {
                 throw createLauncherException("unable to clean the target directory: " + e.getMessage());

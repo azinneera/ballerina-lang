@@ -283,12 +283,18 @@ public class BuildCommand implements BLauncherCmd {
                 if (buildOptions.dumpBuildTime()) {
                     BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
                 }
+                validateGraalVmOption(workspace);
             } catch (ProjectException e) {
                 CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            buildWorkspace(workspace, buildOptions);
+            Path absProjectPath = this.projectPath.toAbsolutePath().normalize();
+            if (workspaceRoot.get().equals(absProjectPath)) {
+                buildWorkspace(workspace, buildOptions);
+            } else {
+                buildSpecificProjectInWorkspace(workspace, absProjectPath);
+            }
         } else {
             buildProject(start, buildOptions, isSingleFileBuild);
         }
@@ -298,8 +304,23 @@ public class BuildCommand implements BLauncherCmd {
         }
     }
 
+    private void buildSpecificProjectInWorkspace(Workspace workspace, Path absProjectPath) {
+        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
+                // clean the target directory(projects only)
+                .addTask(new CleanTargetDirTask(absProjectPath))
+                // Run build tools
+                .addTask(new RunBuildToolsTask(outStream, absProjectPath))
+                // resolve maven dependencies in Ballerina.toml
+                .addTask(new ResolveMavenDependenciesTask(outStream, absProjectPath))
+                // compile the modules
+                .addTask(new CompileTask(outStream, errStream, false, true, absProjectPath))
+                .addTask(new CreateExecutableTask(outStream, output, null, false, absProjectPath))
+                .addTask(new DumpBuildTimeTask(outStream, absProjectPath))
+                .build();
+        taskExecutor.executeTasks(workspace);
+    }
+
     private void buildWorkspace(Workspace workspace, BuildOptions buildOptions) {
-        validateGraalVmOption(workspace);
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
                 .addTask(new CleanTargetDirTask())
@@ -392,8 +413,8 @@ public class BuildCommand implements BLauncherCmd {
 
     private void validateGraalVmOption(Workspace workspace) {
         for (Package pkg : workspace.packages()) {
-            if (workspace.buildOptions(pkg.packageId()).nativeImage() &&
-                    !workspace.buildOptions(pkg.packageId()).graalVMBuildOptions().isEmpty()) {
+            if (workspace.buildOptions(pkg.descriptor()).nativeImage() &&
+                    !workspace.buildOptions(pkg.descriptor()).graalVMBuildOptions().isEmpty()) {
                 this.outStream.println("WARNING: Additional GraalVM build options are ignored for package: " +
                         pkg.packageId() + "since graalvm flag is not set");
             }

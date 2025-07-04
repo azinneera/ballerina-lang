@@ -42,7 +42,7 @@ class PackageContext {
     private final Collection<ModuleId> moduleIds;
     private final ProjectEnvironment projectEnvironment;
     private Project project;
-    private Workspace workspace;
+    private final Workspace workspace;
     private final PackageId packageId;
     private final PackageManifest packageManifest;
     private final DependencyManifest dependencyManifest;

@@ -22,10 +22,12 @@ import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.CodeGeneratorResult;
 import io.ballerina.projects.CodeModifierResult;
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageResolution;
@@ -47,6 +49,7 @@ import org.ballerinalang.central.client.CentralClientConstants;
 import org.wso2.ballerinalang.util.RepoUtils;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +72,7 @@ public class CompileTask implements Task {
     private final transient PrintStream err;
     private final boolean compileForBalPack;
     private final boolean compileForBalBuild;
+    private final Path projectPath;
     private final boolean isPackageModified;
     private final boolean cachesEnabled;
     private long start = 0;
@@ -90,6 +94,19 @@ public class CompileTask implements Task {
         this.compileForBalBuild = compileForBalBuild;
         this.isPackageModified = isPackageModified;
         this.cachesEnabled = cachesEnabled;
+        this.projectPath = null;
+    }
+
+    public CompileTask(PrintStream out, PrintStream err, boolean compileForBalPack, boolean compileForBalBuild,
+                       Path projectPath) {
+        this.out = out;
+        this.err = err;
+        this.compileForBalPack = compileForBalPack;
+        this.compileForBalBuild = compileForBalBuild;
+        this.projectPath = projectPath;
+        this.isPackageModified = true;
+        this.cachesEnabled = false;
+
     }
 
     @Override
@@ -130,34 +147,44 @@ public class CompileTask implements Task {
     @Override
     public void execute(Workspace workspace) {
         try {
-            List<ResolvedPackageDependency> topologicallySortedList =
-                    workspace.dependencyGraph().toTopologicallySortedList();
+            DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
+            List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                    dependencyGraph.toTopologicallySortedList());
+            if (this.projectPath != null) {
+                ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
+                                dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                                        .equals(this.projectPath))
+                        .findFirst().orElseThrow();
+                topologicallySortedList.removeIf(pkg ->
+                        !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                                && !pkg.equals(packageDependency));
+            }
             for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
-                PackageId packageId = packageDependency.packageId();
+                PackageDescriptor packageDescriptor = packageDependency.packageInstance().descriptor();
                 // Print the source
-                printPackageInfo(Workspace.Kind.MULTI_PACKAGE, workspace.getPackage(packageId));
+                printPackageInfo(Workspace.Kind.MULTI_PACKAGE, workspace.getPackage(packageDescriptor));
                 // Validate the source
-                validateProject(workspace.getPackage(packageId));
+                validateProject(workspace.getPackage(packageDescriptor));
                 // Get the package resolution
-                PackageResolution packageResolution = getResolution(workspace.getPackage(packageId),
-                        workspace.buildOptions(packageId));
-                Set<String> packageImports = ProjectUtils.getPackageImports(workspace.getPackage(packageId));
+                PackageResolution packageResolution = getResolution(workspace.getPackage(packageDescriptor),
+                        workspace.buildOptions(packageDescriptor));
+                Set<String> packageImports = ProjectUtils.getPackageImports(workspace.getPackage(packageDescriptor));
 
                 // Run code generator and modifier plugins
                 if (!packageResolution.diagnosticResult().hasErrors()) {
-                    runCodeGenerators(workspace.getPackage(packageId), workspace.buildOptions(packageId),
+                    runCodeGenerators(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor),
                             workspace.kind());
-                    runCodeModifiers(workspace.getPackage(packageId), workspace.buildOptions(packageId),
+                    runCodeModifiers(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor),
                             workspace.kind());
                 }
 
                 // Dump the package dependency graphs if required
-                dumpRawGraphsIfRequired(workspace.getPackage(packageId), packageResolution, packageImports);
+                dumpRawGraphsIfRequired(workspace.getPackage(packageDescriptor), packageResolution, packageImports);
                 // Report resolution diagnostics
-                reportResolutionDiagnostics(workspace.getPackage(packageId));
+                reportResolutionDiagnostics(workspace.getPackage(packageDescriptor));
 
                 // Compile the package
-                getCompilationAndSave(workspace.getPackage(packageId), workspace.buildOptions(packageId));
+                getCompilationAndSave(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor));
             }
         } catch (ProjectException e) {
             throw createLauncherException("compilation failed: " + e.getMessage());

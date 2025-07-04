@@ -18,9 +18,9 @@
 
 package io.ballerina.cli.task;
 
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
-import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ResolvedPackageDependency;
@@ -43,9 +43,16 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
  */
 public class ResolveMavenDependenciesTask implements Task {
     private final transient PrintStream out;
+    private final Path projectPath;
 
     public ResolveMavenDependenciesTask(PrintStream out) {
         this.out = out;
+        this.projectPath = null;
+    }
+
+    public ResolveMavenDependenciesTask(PrintStream outStream, Path projectPath) {
+        this.out = outStream;
+        this.projectPath = projectPath;
     }
 
     @Override
@@ -54,8 +61,21 @@ public class ResolveMavenDependenciesTask implements Task {
     }
     @Override
     public void execute(Workspace workspace) {
-        for (ResolvedPackageDependency packageDependency : workspace.dependencyGraph().toTopologicallySortedList()) {
-            execute(packageDependency.packageInstance(), workspace.target(packageDependency.packageId()));
+        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
+        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.projectPath != null) {
+            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                                    .equals(this.projectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                            && !pkg.equals(packageDependency));
+        }
+        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
+            execute(packageDependency.packageInstance(), workspace.target(
+                    packageDependency.packageInstance().descriptor()));
         }
     }
 

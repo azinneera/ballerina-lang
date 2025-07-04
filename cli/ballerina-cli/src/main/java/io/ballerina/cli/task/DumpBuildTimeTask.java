@@ -21,6 +21,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
@@ -35,6 +36,8 @@ import java.io.PrintStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 
@@ -46,17 +49,35 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 public class DumpBuildTimeTask implements Task {
     private static final String BUILD_TIME_JSON = "build-time.json";
     private final transient PrintStream out;
+    private final Path projectPath;
     private final Path currentDir = Path.of(System.getProperty("user.dir"));
 
     public DumpBuildTimeTask(PrintStream out) {
-        this.out = out;
+        this(out, null);
+    }
+
+    public DumpBuildTimeTask(PrintStream outStream, Path projectPath) {
+        this.out = outStream;
+        this.projectPath = projectPath;
     }
 
     @Override
     public void execute(Workspace workspace) {
-        for (ResolvedPackageDependency packageDependency : workspace.dependencyGraph().toTopologicallySortedList()) {
-            execute(workspace.getPackage(packageDependency.packageId()),
-                    workspace.buildOptions(packageDependency.packageId()));
+        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
+        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.projectPath != null) {
+            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                                    .equals(this.projectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                            && !pkg.equals(packageDependency));
+        }
+        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
+            execute(workspace.getPackage(packageDependency.packageInstance().descriptor()),
+                    workspace.buildOptions(packageDependency.packageInstance().descriptor()));
         }
     }
 
@@ -98,7 +119,7 @@ public class DumpBuildTimeTask implements Task {
         if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_FILE)) {
             return currentDir.resolve(BUILD_TIME_JSON).toAbsolutePath();
         }
-        return pkg.workspace().target(pkg.packageId()).resolve(BUILD_TIME_JSON).toAbsolutePath();
+        return pkg.workspace().target(pkg.descriptor()).resolve(BUILD_TIME_JSON).toAbsolutePath();
     }
 
     private void printBuildTime(BuildTime buildTime) {

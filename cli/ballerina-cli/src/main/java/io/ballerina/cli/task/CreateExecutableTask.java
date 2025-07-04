@@ -41,6 +41,8 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 import static io.ballerina.cli.utils.FileUtils.getFileNameWithoutExtension;
@@ -58,11 +60,17 @@ public class CreateExecutableTask implements Task {
     private Path currentDir;
     private Target target;
     private final boolean isHideTaskOutput;
+    private final Path projectPath;
 
-    public CreateExecutableTask(PrintStream out, String output, Target target, boolean isHideTaskOutput) {
+    public CreateExecutableTask(PrintStream outStream, String output, Object target, boolean isHideTaskOutput) {
+        this(outStream, output, target instanceof Target ? (Target) target : null, isHideTaskOutput, null);
+    }
+
+    public CreateExecutableTask(PrintStream out, String output, Target target, boolean isHideTaskOutput, Path projectPath) {
         this.out = out;
         this.target = target;
         this.isHideTaskOutput = isHideTaskOutput;
+        this.projectPath = projectPath;
         if (output != null) {
             this.output = Path.of(output);
         }
@@ -71,14 +79,32 @@ public class CreateExecutableTask implements Task {
     @Override
     public void execute(Workspace workspace) {
         DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-        for (ResolvedPackageDependency packageDependency : dependencyGraph.toTopologicallySortedList()) {
-            if (!dependencyGraph.getAllDependents(packageDependency).isEmpty()) {
+        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        ResolvedPackageDependency rootPackage;
+        if (this.projectPath != null) {
+            rootPackage = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                                    .equals(this.projectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(rootPackage).contains(pkg)
+                            && !pkg.equals(rootPackage));
+        } else {
+            rootPackage = null;
+        }
+        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
+            if(this.projectPath != null) {
+                if(!packageDependency.equals(rootPackage)) {
+                    continue;
+                }
+            } else if (!dependencyGraph.getAllDependents(packageDependency).isEmpty()) {
                 continue;
             }
             execute(packageDependency.packageInstance(),
-                    workspace.buildOptions(packageDependency.packageId()),
-                    workspace.sourceRoot(packageDependency.packageId()),
-                    workspace.target(packageDependency.packageId()));
+                    workspace.buildOptions(packageDependency.packageInstance().descriptor()),
+                    workspace.sourceRoot(packageDependency.packageInstance().descriptor()),
+                    workspace.target(packageDependency.packageInstance().descriptor()));
         }
     }
 

@@ -61,6 +61,7 @@ public class Workspace {
     private WorkspaceManifest workspaceManifest;
     private final Map<PackageId, Map<PackageManifest.Tool.Field, ToolContext>> toolContextMap;
     private Environment environment;
+//    private DependencyGraph<ResolvedPackageDependency> dependencyGraph;
 
     /**
      * Private constructor to initialize a Workspace with multiple build projects.
@@ -75,6 +76,7 @@ public class Workspace {
         this.projectList = new ArrayList<>();
         this.toolContextMap = new HashMap<>();
         loadProjects();
+//        this.dependencyGraph = buildDependencyGraph();
     }
 
     /**
@@ -90,6 +92,7 @@ public class Workspace {
         this.buildOptions = buildOptions;
         this.projectList = projects;
         this.toolContextMap = toolContextMap;
+//        this.dependencyGraph = buildDependencyGraph();
     }
 
     /**
@@ -146,19 +149,19 @@ public class Workspace {
         return workspaceManifest;
     }
 
-    public Path target(PackageId packageId) {
+    public Path target(PackageDescriptor descriptor) {
         Package aPackage = this.projectList.stream().filter(project ->
-                        project.currentPackage().packageId().equals(packageId)).findFirst()
-                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"))
+                        project.currentPackage().descriptor().equals(descriptor)).findFirst()
+                .orElseThrow(() -> new ProjectException("Package with ID '" + descriptor + "' not found in workspace"))
                 .currentPackage();
         return aPackage.project().targetDir();
     }
 
-    public BuildOptions buildOptions(PackageId packageId) {
+    public BuildOptions buildOptions(PackageDescriptor descriptor) {
         return this.projectList.stream()
-                .filter(project -> project.currentPackage().packageId().equals(packageId))
+                .filter(project -> project.currentPackage().descriptor().equals(descriptor))
                 .findFirst()
-                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"))
+                .orElseThrow(() -> new ProjectException("Package with ID '" + descriptor + "' not found in workspace"))
                 .currentPackage()
                 .project()
                 .buildOptions();
@@ -182,18 +185,16 @@ public class Workspace {
         }
     }
 
-    private BuildProject loadProject(Path packagePath, Environment environment,
-                                     BuildOptions buildOptions) {
+    private BuildProject loadProject(Path packagePath, Environment environment, BuildOptions buildOptions) {
         ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment);
-        BuildProject project = BuildProject.load(environmentBuilder, packagePath, buildOptions, this);
-        return project;
+        return BuildProject.load(environmentBuilder, packagePath, buildOptions, this);
     }
 
-    public Path sourceRoot(PackageId packageId) {
+    public Path sourceRoot(PackageDescriptor descriptor) {
         return this.projectList.stream()
-                .filter(project -> project.currentPackage().packageId().equals(packageId))
+                .filter(project -> project.currentPackage().descriptor().equals(descriptor))
                 .findFirst()
-                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"))
+                .orElseThrow(() -> new ProjectException("Package '" + descriptor + "' not found in workspace"))
                 .currentPackage()
                 .project()
                 .sourceRoot();
@@ -243,10 +244,10 @@ public class Workspace {
         if (this.kind().equals(Kind.SINGLE_PACKAGE) || this.kind().equals(Kind.MULTI_PACKAGE)) {
             for (Project project : this.projectList) {
                 Package pkg = project.currentPackage();
-                Path buildFilePath = target(pkg.packageId()).resolve(BUILD_FILE);
+                Path buildFilePath = target(pkg.descriptor()).resolve(BUILD_FILE);
                 boolean shouldUpdate = pkg.getResolution().autoUpdate();
 
-                // if build file does not exists
+                // if build file does not exist
                 if (!buildFilePath.toFile().exists()) {
                     createBuildFile(buildFilePath);
                     writeBuildFile(pkg, buildFilePath);
@@ -289,31 +290,33 @@ public class Workspace {
         ProjectUtils.writeBuildFile(buildFilePath, buildJson);
     }
 
-    public Package getPackage(PackageId packageId) {
+    public Package getPackage(PackageDescriptor descriptor) {
         return this.projectList.stream()
                 .map(Project::currentPackage)
-                .filter(pkg -> pkg.packageId().equals(packageId))
+                .filter(pkg -> pkg.descriptor().equals(descriptor))
                 .findFirst()
-                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"));
+                .orElseThrow(() -> new ProjectException("Package '" + descriptor + "' not found in workspace"));
     }
 
-    public ProjectEnvironment packageEnvironmentContext(PackageId packageId) {
+    public ProjectEnvironment packageEnvironmentContext(PackageDescriptor descriptor) {
         return this.projectList.stream()
-                .filter(project -> project.currentPackage().packageId().equals(packageId))
+                .filter(project -> project.currentPackage().descriptor().equals(descriptor))
                 .findFirst()
-                .orElseThrow(() -> new ProjectException("Package with ID '" + packageId + "' not found in workspace"))
+                .orElseThrow(() -> new ProjectException("Package '" + descriptor + "' not found in workspace"))
                 .projectEnvironmentContext();
     }
 
     public static class Modifier {
-        private final Workspace oldWorkspace;
+        private final Workspace workspace;
         private WorkspaceBallerinaToml workspaceBallerinaToml;
         private final List<Project> projectsList;
+        private final DependencyGraph<ResolvedPackageDependency> dependencyGraph;
 
         private Modifier(Workspace oldWorkspace) {
-            this.oldWorkspace = oldWorkspace;
+            this.workspace = oldWorkspace;
             this.workspaceBallerinaToml = oldWorkspace.ballerinaToml();
             this.projectsList = oldWorkspace.projectList;
+            this.dependencyGraph = oldWorkspace.dependencyGraph();
         }
 
         public Modifier updateBalWorkspaceToml(WorkspaceBallerinaToml workspaceBallerinaToml) {
@@ -322,8 +325,8 @@ public class Workspace {
         }
 
         public Modifier addPackage(PackageConfig packageConfig) {
-            Project project = oldWorkspace.loadProject(packageConfig.packagePath(), oldWorkspace.environment(),
-                    oldWorkspace.buildOptions);
+            Project project = workspace.loadProject(packageConfig.packagePath(), workspace.environment(),
+                    workspace.buildOptions);
 
             if (this.projectsList.stream().anyMatch(prj -> prj.currentPackage().packageId()
                     .equals(packageConfig.packageId()))) {
@@ -334,25 +337,35 @@ public class Workspace {
             return this;
         }
 
-        public Modifier removePackage(PackageId packageId) {
-            Project project = this.projectsList.stream().filter(prj -> prj.currentPackage().packageId()
-                    .equals(packageId)).findFirst().orElseThrow(() -> new ProjectException(
-                    "Package with ID '" + packageId + "' not found in workspace"));
+        public Modifier removePackage(PackageDescriptor descriptor) {
+            Project project = this.projectsList.stream().filter(prj -> prj.currentPackage().descriptor()
+                    .equals(descriptor)).findFirst().orElseThrow(() -> new ProjectException(
+                    "Package with ID '" + descriptor + "' not found in workspace"));
 
-            this.projectsList.remove(project);
+            // Reset the dependant packages
+            ResolvedPackageDependency pkgNode = dependencyGraph.toTopologicallySortedList().stream()
+                    .filter(dep -> dep.packageInstance().descriptor().equals(descriptor)).findFirst().orElseThrow();
             io.ballerina.projects.environment.PackageCache environmentPackageCache =
-                    oldWorkspace.environment().getService(io.ballerina.projects.environment.PackageCache.class);
-            environmentPackageCache.removePackage(project.currentPackage().packageId());
+                    workspace.environment().getService(io.ballerina.projects.environment.PackageCache.class);
+
+            for (ResolvedPackageDependency dependent : dependencyGraph.getAllDependents(pkgNode)) {
+                Project dependentProject = dependent.packageInstance().project();
+                dependentProject.clearCaches();
+                environmentPackageCache.removePackage(dependentProject.currentPackage().descriptor());
+            }
+            this.projectsList.remove(project);
+            environmentPackageCache.removePackage(project.currentPackage().descriptor());
+
             return this;
         }
 
         public Workspace apply() {
-            if (this.workspaceBallerinaToml != this.oldWorkspace.workspaceBallerinaToml) {
-                return new Workspace(oldWorkspace.workspaceRoot, workspaceBallerinaToml.tomlDocument(),
-                        oldWorkspace.buildOptions);
+            if (this.workspaceBallerinaToml != this.workspace.workspaceBallerinaToml) {
+                return new Workspace(workspace.workspaceRoot, workspaceBallerinaToml.tomlDocument(),
+                        workspace.buildOptions);
             }
-            return new Workspace(oldWorkspace.workspaceRoot, this.workspaceBallerinaToml, projectsList,
-                    oldWorkspace.buildOptions, oldWorkspace.toolContextMap);
+            return new Workspace(workspace.workspaceRoot, this.workspaceBallerinaToml, projectsList,
+                    workspace.buildOptions, workspace.toolContextMap);
         }
     }
 

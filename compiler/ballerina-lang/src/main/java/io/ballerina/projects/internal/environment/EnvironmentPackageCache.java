@@ -87,4 +87,20 @@ public class EnvironmentPackageCache implements WritablePackageCache {
                 .remove(pkgDesc.version());
         projectsById.remove(packageId);
     }
+
+    @Override
+    public void removePackage(PackageDescriptor descriptor) {
+        if (!projectsByOrgNameVersion.containsKey(descriptor.org()) ||
+                !projectsByOrgNameVersion.get(descriptor.org()).containsKey(descriptor.name()) ||
+                !projectsByOrgNameVersion.get(descriptor.org()).get(descriptor.name())
+                        .containsKey(descriptor.version())) {
+            return;
+        }
+        Project project = projectsByOrgNameVersion.get(descriptor.org()).get(descriptor.name())
+                .get(descriptor.version());
+        projectsByOrgNameVersion.get(descriptor.org())
+                .get(descriptor.name())
+                .remove(descriptor.version());
+        projectsById.remove(project.currentPackage().packageId());
+    }
 }

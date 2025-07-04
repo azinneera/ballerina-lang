@@ -66,12 +66,7 @@ public class DefaultPackageResolver implements PackageResolver {
                                   PackageRepository localRepo,
                                   Map<String, PackageRepository> customRepos,
                                   PackageCache packageCache) {
-        this.distributionRepo = distributionRepo;
-        this.centralRepo = centralRepo;
-        this.customRepos = customRepos;
-        this.localRepo = localRepo;
-        this.workspaceRepo = null;
-        this.packageCache = (WritablePackageCache) packageCache;
+        this(distributionRepo, centralRepo, null, localRepo, customRepos, packageCache);
     }
 
     public DefaultPackageResolver(PackageRepository distributionRepo,

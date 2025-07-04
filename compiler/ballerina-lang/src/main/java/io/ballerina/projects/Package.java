@@ -751,7 +751,7 @@ public class Package {
                 // A non-empty diff means deletion of nodes from the old graph is required
                 // to get the new graph, hence we remove these modules and its dependants from the package cache.
                 for (ResolvedPackageDependency dependency : diff) {
-                    environmentPackageCache.removePackage(dependency.packageInstance().packageId());
+                    environmentPackageCache.removePackage(dependency.packageInstance().descriptor());
                     deleteCaches(dependency, oldGraph, compilerContext);
                 }
             }

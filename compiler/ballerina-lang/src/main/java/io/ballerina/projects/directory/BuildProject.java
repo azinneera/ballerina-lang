@@ -224,7 +224,8 @@ public class BuildProject extends Project implements Comparable<BuildProject> {
     @Override
     public void clearCaches() {
         resetPackage(this);
-        this.projectEnvironment = ProjectEnvironmentBuilder.getDefaultBuilder().build(this);
+        this.projectEnvironment = ProjectEnvironmentBuilder.getBuilder(this.workspace.environment())
+                .build(this);
     }
 
     @Override

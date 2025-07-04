@@ -18,6 +18,7 @@
 package io.ballerina.projects.environment;
 
 import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
@@ -74,5 +75,12 @@ public interface PackageCache {
      * @param packageId packageId
      */
     void removePackage(PackageId packageId);
+
+    /**
+     * Removes a package with the given PackageId.
+     *
+     * @param descriptor package descriptor
+     */
+    void removePackage(PackageDescriptor descriptor);
 
 }

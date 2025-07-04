@@ -48,6 +48,7 @@ import static org.ballerinalang.test.runtime.util.TesterinaConstants.HYPHEN;
  * @since 2201.13.0
  */
 @CommandLine.Command(name = TOOL_USE_COMMAND, description = "Set a tool version as the active version.")
+@Deprecated
 public class ToolUseCommand implements BLauncherCmd {
     private final boolean exitWhenFinish;
     private final PrintStream outStream;
