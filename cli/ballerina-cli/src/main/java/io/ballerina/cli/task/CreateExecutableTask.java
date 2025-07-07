@@ -190,7 +190,7 @@ public class CreateExecutableTask implements Task {
     private Target getTarget(Package pkg, Path sourceRoot, Path targetPath) {
         Target target;
         try {
-            if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_FILE)) {
+            if (pkg.workspace().kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
                 target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
                 target.setOutputPath(getExecutablePath(sourceRoot));
             } else {

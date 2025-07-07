@@ -225,8 +225,16 @@ public class Workspace {
         }
     }
 
-    public Kind kind() {
-        return Kind.MULTI_PACKAGE;
+    public ProjectKind kind() {
+        if (this.projectList.stream().findFirst().isEmpty() ||
+                this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.WORKSPACE_PROJECT))) {
+            return ProjectKind.WORKSPACE_PROJECT;
+        } else if (this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.BUILD_PROJECT))) {
+            return ProjectKind.BUILD_PROJECT;
+        } else if (this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.BALA_PROJECT))) {
+            return ProjectKind.BALA_PROJECT;
+        }
+        return ProjectKind.SINGLE_FILE_PROJECT;
     }
 
     public Environment environment() {
@@ -241,7 +249,7 @@ public class Workspace {
     }
 
     public void save() {
-        if (this.kind().equals(Kind.SINGLE_PACKAGE) || this.kind().equals(Kind.MULTI_PACKAGE)) {
+        if (this.kind().equals(ProjectKind.WORKSPACE_PROJECT) || this.kind().equals(ProjectKind.BUILD_PROJECT)) {
             for (Project project : this.projectList) {
                 Package pkg = project.currentPackage();
                 Path buildFilePath = target(pkg.descriptor()).resolve(BUILD_FILE);
@@ -367,12 +375,5 @@ public class Workspace {
             return new Workspace(workspace.workspaceRoot, this.workspaceBallerinaToml, projectsList,
                     workspace.buildOptions, workspace.toolContextMap);
         }
-    }
-
-    public enum Kind {
-        SINGLE_PACKAGE,
-        MULTI_PACKAGE,
-        BALA,
-        SINGLE_FILE
     }
 }

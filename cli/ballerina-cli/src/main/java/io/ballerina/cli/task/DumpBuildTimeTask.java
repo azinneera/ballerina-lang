@@ -116,7 +116,7 @@ public class DumpBuildTimeTask implements Task {
     }
 
     private Path getBuildTimeFilePath(Package pkg) {
-        if (pkg.workspace().kind().equals(Workspace.Kind.SINGLE_FILE)) {
+        if (pkg.workspace().kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
             return currentDir.resolve(BUILD_TIME_JSON).toAbsolutePath();
         }
         return pkg.workspace().target(pkg.descriptor()).resolve(BUILD_TIME_JSON).toAbsolutePath();

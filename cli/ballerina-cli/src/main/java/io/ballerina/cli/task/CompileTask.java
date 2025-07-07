@@ -34,6 +34,7 @@ import io.ballerina.projects.PackageResolution;
 import io.ballerina.projects.PlatformLibraryScope;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Workspace;
@@ -114,9 +115,9 @@ public class CompileTask implements Task {
         try {
             // Print the source
             if (project instanceof SingleFileProject) {
-                printPackageInfo(Workspace.Kind.SINGLE_FILE, project.currentPackage());
+                printPackageInfo(ProjectKind.SINGLE_FILE_PROJECT, project.currentPackage());
             } else {
-                printPackageInfo(Workspace.Kind.SINGLE_PACKAGE, project.currentPackage());
+                printPackageInfo(ProjectKind.BUILD_PROJECT, project.currentPackage());
             }
 
             // Validate the source
@@ -162,7 +163,7 @@ public class CompileTask implements Task {
             for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
                 PackageDescriptor packageDescriptor = packageDependency.packageInstance().descriptor();
                 // Print the source
-                printPackageInfo(Workspace.Kind.MULTI_PACKAGE, workspace.getPackage(packageDescriptor));
+                printPackageInfo(ProjectKind.WORKSPACE_PROJECT, workspace.getPackage(packageDescriptor));
                 // Validate the source
                 validateProject(workspace.getPackage(packageDescriptor));
                 // Get the package resolution
@@ -191,9 +192,9 @@ public class CompileTask implements Task {
         }
     }
 
-    private void printPackageInfo(Workspace.Kind kind, Package pkg) {
+    private void printPackageInfo(ProjectKind kind, Package pkg) {
         String sourceName;
-        if (kind.equals(Workspace.Kind.SINGLE_PACKAGE)) {
+        if (kind.equals(ProjectKind.SINGLE_FILE_PROJECT)) {
             sourceName = pkg.getDefaultModule().document(
                     pkg.getDefaultModule().documentIds().iterator().next()).name();
         } else {
@@ -338,8 +339,8 @@ public class CompileTask implements Task {
         return packageResolution;
     }
 
-    private void runCodeGenerators(Package pkg, BuildOptions buildOptions, Workspace.Kind workspaceKind) {
-        if (workspaceKind.equals(Workspace.Kind.BALA) || workspaceKind.equals(Workspace.Kind.SINGLE_FILE) ||
+    private void runCodeGenerators(Package pkg, BuildOptions buildOptions, ProjectKind projectKind) {
+        if (projectKind.equals(ProjectKind.BALA_PROJECT) || projectKind.equals(ProjectKind.SINGLE_FILE_PROJECT) ||
                 isPackCmdForATemplatePkg(pkg)) {
             return;
         }
@@ -356,8 +357,8 @@ public class CompileTask implements Task {
         }
     }
 
-    private void runCodeModifiers(Package pkg, BuildOptions buildOptions, Workspace.Kind workspaceKind) {
-        if (workspaceKind.equals(Workspace.Kind.BALA) || workspaceKind.equals(Workspace.Kind.SINGLE_FILE) ||
+    private void runCodeModifiers(Package pkg, BuildOptions buildOptions, ProjectKind projectKind) {
+        if (projectKind.equals(ProjectKind.BALA_PROJECT) || projectKind.equals(ProjectKind.SINGLE_FILE_PROJECT) ||
                 isPackCmdForATemplatePkg(pkg)) {
             return;
         }
