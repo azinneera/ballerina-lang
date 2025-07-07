@@ -115,8 +115,6 @@ public class RunBuildToolsTask implements Task {
                     !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
                             && !pkg.equals(packageDependency));
         }
-
-        Workspace.Modifier workspaceModifier = workspace.modify();
         for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
             workspace.setToolContextMap(packageDependency.packageId(), toolContextMap);
             execute(packageDependency.packageInstance());
@@ -125,9 +123,9 @@ public class RunBuildToolsTask implements Task {
             PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(
                     workspace.sourceRoot(packageDescriptor),
                     workspace.buildOptions(packageDescriptor).disableSyntaxTree());
-            workspaceModifier.removePackage(packageDescriptor).addPackage(packageConfig);
+            workspace.removePackage(packageDescriptor);
+            workspace.addPackage(packageConfig);
         }
-        workspaceModifier.apply();
     }
 
     private void execute (Package pkg) {

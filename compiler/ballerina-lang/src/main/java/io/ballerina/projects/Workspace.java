@@ -61,7 +61,7 @@ public class Workspace {
     private WorkspaceManifest workspaceManifest;
     private final Map<PackageId, Map<PackageManifest.Tool.Field, ToolContext>> toolContextMap;
     private Environment environment;
-//    private DependencyGraph<ResolvedPackageDependency> dependencyGraph;
+    private DependencyGraph<ResolvedPackageDependency> dependencyGraph;
 
     /**
      * Private constructor to initialize a Workspace with multiple build projects.
@@ -76,7 +76,7 @@ public class Workspace {
         this.projectList = new ArrayList<>();
         this.toolContextMap = new HashMap<>();
         loadProjects();
-//        this.dependencyGraph = buildDependencyGraph();
+        this.dependencyGraph = buildDependencyGraph();
     }
 
     /**
@@ -92,7 +92,7 @@ public class Workspace {
         this.buildOptions = buildOptions;
         this.projectList = projects;
         this.toolContextMap = toolContextMap;
-//        this.dependencyGraph = buildDependencyGraph();
+        this.dependencyGraph = buildDependencyGraph();
     }
 
     /**
@@ -201,6 +201,13 @@ public class Workspace {
     }
 
     public DependencyGraph<ResolvedPackageDependency> dependencyGraph() {
+        if (dependencyGraph == null) {
+            dependencyGraph = buildDependencyGraph();
+        }
+        return dependencyGraph;
+    }
+
+    private DependencyGraph<ResolvedPackageDependency> buildDependencyGraph() {
         WorkspaceDependencyGraphBuilder graphBuilder = new WorkspaceDependencyGraphBuilder();
         for (Project project : this.projectList) {
             Package pkg = project.currentPackage();
@@ -312,6 +319,40 @@ public class Workspace {
                 .findFirst()
                 .orElseThrow(() -> new ProjectException("Package '" + descriptor + "' not found in workspace"))
                 .projectEnvironmentContext();
+    }
+
+    public void removePackage(PackageDescriptor descriptor) {
+        Project project = this.projectList.stream().filter(prj -> prj.currentPackage().descriptor()
+                .equals(descriptor)).findFirst().orElseThrow(() -> new ProjectException(
+                "Package with ID '" + descriptor + "' not found in workspace"));
+
+        // Reset the dependant packages
+        if (this.dependencyGraph != null) {
+            ResolvedPackageDependency pkgNode = dependencyGraph.toTopologicallySortedList().stream()
+                    .filter(dep -> dep.packageInstance().descriptor().equals(descriptor)).findFirst().orElseThrow();
+            io.ballerina.projects.environment.PackageCache environmentPackageCache =
+                    this.environment.getService(io.ballerina.projects.environment.PackageCache.class);
+
+            for (ResolvedPackageDependency dependent : dependencyGraph.getAllDependents(pkgNode)) {
+                Project dependentProject = dependent.packageInstance().project();
+                dependentProject.clearCaches();
+                environmentPackageCache.removePackage(dependentProject.currentPackage().descriptor());
+            }
+            this.dependencyGraph = null; // Reset the dependency graph
+        }
+        this.projectList.remove(project);
+    }
+
+    public void addPackage(PackageConfig packageConfig) {
+        Project project = loadProject(packageConfig.packagePath(), environment, buildOptions);
+
+        if (this.projectList.stream().anyMatch(prj -> prj.currentPackage().packageId()
+                .equals(packageConfig.packageId()))) {
+            throw new ProjectException("Package with ID '" + packageConfig.packageId()
+                    + "' already exists in the workspace");
+        }
+        this.projectList.add(project);
+        this.dependencyGraph = null; // Reset the dependency graph
     }
 
     public static class Modifier {
