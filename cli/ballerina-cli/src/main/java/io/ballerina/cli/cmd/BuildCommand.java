@@ -37,17 +37,21 @@ import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.Workspace;
+import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.DependencyUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectPaths;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.BUILD_COMMAND;
+import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
 
 /**
@@ -302,7 +306,18 @@ public class BuildCommand implements BLauncherCmd {
                 }
             }
         }
-        buildWorkspace(workspace, buildOptions);
+        Target target = null;
+//        try {
+//            if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
+//                target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
+//                target.setOutputPath(target.getBinPath());
+//            }
+//        } catch (IOException e) {
+//            throw createLauncherException("unable to resolve the target path:" + e.getMessage());
+//        } catch (ProjectException e) {
+//            throw createLauncherException("unable to create the executable:" + e.getMessage());
+//        }
+        buildWorkspace(workspace, buildOptions, target);
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
@@ -324,7 +339,7 @@ public class BuildCommand implements BLauncherCmd {
         taskExecutor.executeTasks(workspace);
     }
 
-    private void buildWorkspace(Workspace workspace, BuildOptions buildOptions) {
+    private void buildWorkspace(Workspace workspace, BuildOptions buildOptions, Target target) {
         boolean isSingleFile = workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT);
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
@@ -335,47 +350,12 @@ public class BuildCommand implements BLauncherCmd {
                 .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFile)
                 // compile the modules
                 .addTask(new CompileTask(outStream, errStream, false, true,
-                        true, buildOptions.enableCache()))
-                .addTask(new CreateExecutableTask(outStream, output, null, false))
+                        true, false))
+                .addTask(new CreateExecutableTask(outStream, output, target, false))
                 .addTask(new DumpBuildTimeTask(outStream))
                 .build();
         taskExecutor.executeTasks(workspace);
     }
-
-//    private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
-//        Workspace workspace;
-//        try {
-//            workspace = Workspace.load(this.projectPath);
-//        } catch (ProjectException e) {
-//            CommandUtil.printError(this.errStream, "failed to load the Ballerina project: " + e.getMessage(),
-//                    null, false);
-//            CommandUtil.exitError(this.exitWhenFinish);
-//            return;
-//        }
-//
-//        executeTasks(workspace);
-//    }
-
-//    private void executeTasks(BuildOptions buildOptions, boolean isSingleFileBuild, Project project,
-//                              boolean hasDependents) {
-//        validateGraalVmOption(project);
-//        boolean isPackageModified = isProjectUpdated(project); // Check package files are modified after last build
-//
-//        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-//                // clean the target directory(projects only)
-//                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
-//                // Run build tools
-//                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
-//                // resolve maven dependencies in Ballerina.toml
-//                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
-//                // compile the modules
-//                .addTask(new CompileTask(outStream, errStream, false, true,
-//                        isPackageModified, buildOptions.enableCache()))
-//                .addTask(new CreateExecutableTask(outStream, output, null, false), hasDependents)
-//                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
-//                .build();
-//        taskExecutor.executeTasks(project);
-//    }
 
     @Override
     public String getName() {
@@ -416,7 +396,6 @@ public class BuildCommand implements BLauncherCmd {
 
     private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
-
         buildOptionsBuilder
                 .setExperimental(experimentalFlag)
                 .setOffline(offline)

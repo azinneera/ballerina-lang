@@ -235,7 +235,7 @@ public class Workspace {
                 .orElseThrow(() -> new ProjectException("Package '" + descriptor + "' not found in workspace"))
                 .currentPackage()
                 .project()
-                .sourceRoot();
+                .sourceRoot().toAbsolutePath().normalize();
     }
 
     public DependencyGraph<ResolvedPackageDependency> dependencyGraph() {

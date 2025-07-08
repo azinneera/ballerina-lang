@@ -34,10 +34,12 @@ import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.projects.util.ProjectUtils;
 import picocli.CommandLine;
 
@@ -49,6 +51,7 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.RUN_COMMAND;
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
@@ -236,47 +239,62 @@ public class RunCommand implements BLauncherCmd {
 
 
         // load project
-        BuildOptions buildOptions = constructBuildOptions();
-
         boolean isSingleFileBuild = false;
         if (FileUtils.hasExtension(this.projectPath)) {
             try {
-                if (buildOptions.dumpBuildTime()) {
-                    start = System.currentTimeMillis();
-                    BuildTime.getInstance().timestamp = start;
-                }
-                project = SingleFileProject.load(this.projectPath, buildOptions);
-                if (buildOptions.dumpBuildTime()) {
-                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-                }
+                isSingleFileBuild = true;
             } catch (ProjectException e) {
-                CommandUtil.printError(this.errStream, e.getMessage(), runCmd, false);
+                CommandUtil.printError(this.errStream, e.getMessage(), null, false);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            isSingleFileBuild = true;
-        } else {
-            try {
-                if (buildOptions.dumpBuildTime()) {
-                    start = System.currentTimeMillis();
-                    BuildTime.getInstance().timestamp = start;
-                }
-                project = BuildProject.load(this.projectPath, buildOptions);
-                if (buildOptions.dumpBuildTime()) {
-                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-                }
-            } catch (ProjectException e) {
-                CommandUtil.printError(this.errStream, e.getMessage(), runCmd, false);
+        } else if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is a workspace, please specify a package or a source file to run",
+                    null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath) && !ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is not a valid Ballerina package or workspace: "
+                            + this.projectPath.toAbsolutePath(), null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions(workspaceRoot.isPresent());
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+            BuildTime.getInstance().timestamp = start;
+        }
+
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
+            if (targetDir != null) {
+                CommandUtil.printError(this.errStream,
+                        "'--target-dir' is not supported for workspaces", null, true);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
         }
 
-        Target target;
+        Target target = null;
         try {
-            if (project.kind().equals(ProjectKind.BUILD_PROJECT)) {
-                target = new Target(project.targetDir());
-            } else {
+            if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
                 target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
                 target.setOutputPath(target.getBinPath());
             }
@@ -286,24 +304,28 @@ public class RunCommand implements BLauncherCmd {
             throw createLauncherException("unable to create the executable:" + e.getMessage());
         }
 
-        // Check package files are modified after last build
-        boolean isPackageModified = isProjectUpdated(project);
+        runProject(workspace, this.projectPath.toAbsolutePath().normalize(), args, target);
+        if (this.exitWhenFinish) {
+            Runtime.getRuntime().exit(0);
+        }
+    }
+
+    private void runProject(Workspace workspace, Path absProjectPath, String[] args, Target target) {
+        boolean isSingleFile = workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT);
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean target dir for projects
-                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
+                .addTask(new CleanTargetDirTask(absProjectPath), isSingleFile)
                 // Run build tools
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
+                .addTask(new RunBuildToolsTask(outStream, absProjectPath), isSingleFile)
                 // resolve maven dependencies in Ballerina.toml
-                .addTask(new ResolveMavenDependenciesTask(outStream))
+                .addTask(new ResolveMavenDependenciesTask(outStream, absProjectPath), isSingleFile)
                 // compile the modules
-                .addTask(new CompileTask(outStream, errStream, false, false,
-                        isPackageModified, buildOptions.enableCache()))
-//                .addTask(new CopyResourcesTask(), isSingleFileBuild)
-                .addTask(new CreateExecutableTask(outStream, null, target, true))
-                .addTask(runExecutableTask = new RunExecutableTask(args, outStream, errStream, target))
-                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
+                .addTask(new CompileTask(outStream, errStream, false, true, absProjectPath))
+                .addTask(new CreateExecutableTask(outStream, null, target,false, absProjectPath))
+                .addTask(new RunExecutableTask(args, outStream, errStream, target, absProjectPath))
+                .addTask(new DumpBuildTimeTask(outStream, absProjectPath))
                 .build();
-        taskExecutor.executeTasks(project);
+        taskExecutor.executeTasks(workspace);
     }
 
     @Override
@@ -339,7 +361,7 @@ public class RunCommand implements BLauncherCmd {
         }
     }
 
-    private BuildOptions constructBuildOptions() {
+    private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
 
         buildOptionsBuilder
@@ -361,7 +383,7 @@ public class RunCommand implements BLauncherCmd {
                 .setOptimizeDependencyCompilation(optimizeDependencyCompilation)
                 .setLockingMode(lockingMode);
 
-        if (targetDir != null) {
+        if (targetDir != null && !workspaceBuild) {
             buildOptionsBuilder.targetDir(targetDir.toString());
         }
 

@@ -20,13 +20,18 @@ package io.ballerina.cli.task;
 
 import io.ballerina.cli.launcher.RuntimePanicException;
 import io.ballerina.cli.utils.BuildTime;
+import io.ballerina.projects.DependencyGraph;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ResolvedPackageDependency;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import org.wso2.ballerinalang.util.Lists;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,9 +50,14 @@ public class RunExecutableTask implements Task {
     private final List<String> args;
     private final transient PrintStream out;
     private final transient PrintStream err;
-    private final Target target;
+    private Target target;
     private Process process;
+    private final Path projectPath;
 
+
+    public RunExecutableTask(String[] args, PrintStream out, PrintStream err, Target target) {
+        this(args, out, err, target, null);
+    }
     /**
      * Create a task to run the executable. This requires {@link CreateExecutableTask} to be completed.
      *
@@ -55,11 +65,12 @@ public class RunExecutableTask implements Task {
      * @param out output stream
      * @param err error stream
      */
-    public RunExecutableTask(String[] args, PrintStream out, PrintStream err, Target target) {
+    public RunExecutableTask(String[] args, PrintStream out, PrintStream err, Target target, Path projectPath) {
         this.args = Lists.of(args);
         this.out = out;
         this.err = err;
         this.target = target;
+        this.projectPath = projectPath;
     }
 
     @Override
@@ -74,8 +85,11 @@ public class RunExecutableTask implements Task {
         out.println();
 
         try {
-            this.runGeneratedExecutable(project);
-        } catch (ProjectException e) {
+            if (target == null) {
+                target = new Target(project.targetDir());
+            }
+            this.runGeneratedExecutable(project.currentPackage());
+        } catch (ProjectException | IOException e) {
             throw createLauncherException(e.getMessage());
         }
         if (project.buildOptions().dumpBuildTime()) {
@@ -83,19 +97,34 @@ public class RunExecutableTask implements Task {
         }
     }
 
-    private void runGeneratedExecutable(Project project) {
+    @Override
+    public void execute(Workspace workspace) {
+        Package pkg = workspace.packages().stream().filter(aPackage ->
+                aPackage.workspace().sourceRoot(
+                aPackage.descriptor()).equals(projectPath)).findFirst().orElseThrow();
+        if (target == null) {
+            try {
+                target = new Target(workspace.target(pkg.descriptor()));
+            } catch (ProjectException | IOException e) {
+                throw createLauncherException(e.getMessage());
+            }
+        }
+        runGeneratedExecutable(pkg);
+    }
+
+    private void runGeneratedExecutable(Package pkg) {
         try {
             List<String> commands = new ArrayList<>();
             commands.add(System.getProperty("java.command"));
             if (isInDebugMode()) {
                 commands.add(getDebugArgs(err));
             }
+            Path executablePath = getExecutablePath(pkg, target).toAbsolutePath().normalize();
             commands.add("-XX:+HeapDumpOnOutOfMemoryError");
             commands.add("-XX:HeapDumpPath=" + System.getProperty(USER_DIR));
             // Sets classpath with executable thin jar and all dependency jar paths.
             commands.add("-jar");
-            commands.add(this.target.getExecutablePath(project.currentPackage()).toAbsolutePath()
-                    .normalize().toString());
+            commands.add(executablePath.toString());
             commands.addAll(args);
             ProcessBuilder pb = new ProcessBuilder(commands).inheritIO();
             process = pb.start();
@@ -116,6 +145,14 @@ public class RunExecutableTask implements Task {
     public void killProcess() {
         if (process != null && process.isAlive()) {
             process.destroy();
+        }
+    }
+
+    private Path getExecutablePath(Package pkg, Target target) {
+        try {
+            return target.getExecutablePath(pkg).toAbsolutePath().normalize();
+        } catch (IOException e) {
+            throw createLauncherException(e.getMessage());
         }
     }
 }
