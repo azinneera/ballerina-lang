@@ -24,6 +24,7 @@ import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.PackageConfigCreator;
 import io.ballerina.projects.repos.TempDirCompilationCache;
 import io.ballerina.projects.util.ProjectConstants;
@@ -54,8 +55,7 @@ public class SingleFileProject extends Project {
     public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder, Path filePath,
                                          BuildOptions buildOptions) {
         PackageConfig packageConfig = PackageConfigCreator.createSingleFileProjectConfig(filePath);
-        SingleFileProject singleFileProject = new SingleFileProject(
-                environmentBuilder, filePath, buildOptions);
+        SingleFileProject singleFileProject = new SingleFileProject(null, environmentBuilder, filePath, buildOptions);
         singleFileProject.addPackage(packageConfig);
         return singleFileProject;
     }
@@ -68,13 +68,25 @@ public class SingleFileProject extends Project {
         PackageConfig packageConfig = PackageConfigCreator.createSingleFileProjectConfig(filePath,
                 buildOptions.disableSyntaxTree());
         ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-        SingleFileProject singleFileProject = new SingleFileProject(environmentBuilder, filePath, buildOptions);
+        SingleFileProject singleFileProject = new SingleFileProject(null, environmentBuilder, filePath,
+                buildOptions);
         singleFileProject.addPackage(packageConfig);
         return singleFileProject;
     }
 
-    private SingleFileProject(ProjectEnvironmentBuilder environmentBuilder, Path filePath, BuildOptions buildOptions) {
-        super(ProjectKind.SINGLE_FILE_PROJECT, filePath, environmentBuilder, buildOptions);
+    public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder,
+                                         Path filePath, BuildOptions buildOptions, Workspace workspace) {
+        PackageConfig packageConfig = PackageConfigCreator.createSingleFileProjectConfig(filePath,
+                buildOptions.disableSyntaxTree());
+        SingleFileProject singleFileProject = new SingleFileProject(workspace, environmentBuilder, filePath,
+                buildOptions);
+        singleFileProject.addPackage(packageConfig);
+        return singleFileProject;
+    }
+
+    private SingleFileProject(Workspace workspace, ProjectEnvironmentBuilder environmentBuilder, Path filePath,
+                              BuildOptions buildOptions) {
+        super(ProjectKind.SINGLE_FILE_PROJECT, filePath, environmentBuilder, buildOptions, workspace);
 
         try {
             this.targetDir = Files.createTempDirectory("ballerina-cache" + System.nanoTime());
@@ -96,7 +108,7 @@ public class SingleFileProject extends Project {
     @Override
     public Project duplicate() {
         BuildOptions duplicateBuildOptions = BuildOptions.builder().build().acceptTheirs(buildOptions());
-        SingleFileProject singleFileProject = new SingleFileProject(
+        SingleFileProject singleFileProject = new SingleFileProject(this.workspace,
                 ProjectEnvironmentBuilder.getDefaultBuilder(), this.sourceRoot, duplicateBuildOptions);
         return resetPackage(singleFileProject);
     }

@@ -24,6 +24,7 @@ import org.wso2.ballerinalang.compiler.util.CompilerOptions;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,18 +48,6 @@ public abstract class Project {
 
     protected Project(ProjectKind projectKind,
                       Path projectPath,
-                      ProjectEnvironmentBuilder projectEnvironmentBuilder,
-                      BuildOptions buildOptions) {
-        this.projectKind = projectKind;
-        this.sourceRoot = projectPath;
-        this.buildOptions = buildOptions;
-        this.projectEnvironment = projectEnvironmentBuilder.build(this);
-        this.compilerPluginContexts = new ArrayList<>();
-        this.workspace = null;
-    }
-
-    protected Project(ProjectKind projectKind,
-                      Path projectPath,
                       ProjectEnvironmentBuilder projectEnvironmentBuilder) {
         this.projectKind = projectKind;
         this.sourceRoot = projectPath;
@@ -66,6 +55,7 @@ public abstract class Project {
         this.buildOptions = BuildOptions.builder().build();
         this.compilerPluginContexts = new ArrayList<>();
         this.workspace = null;
+        this.toolContextMap = new HashMap<>();
     }
 
     protected Project(ProjectKind projectKind,
@@ -79,6 +69,7 @@ public abstract class Project {
         this.projectEnvironment = projectEnvironmentBuilder.build(this);
         this.compilerPluginContexts = new ArrayList<>();
         this.workspace = workspace;
+        this.toolContextMap = new HashMap<>();
     }
 
     void setBuildOptions(BuildOptions buildOptions) {

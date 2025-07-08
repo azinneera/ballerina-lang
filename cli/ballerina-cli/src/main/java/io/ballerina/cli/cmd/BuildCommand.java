@@ -32,6 +32,7 @@ import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.directory.SingleFileProject;
@@ -270,35 +271,38 @@ public class BuildCommand implements BLauncherCmd {
             BuildTime.getInstance().timestamp = start;
         }
 
-        if (workspaceRoot.isPresent()) {
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+            validateGraalVmOption(workspace);
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
             if (targetDir != null) {
                 CommandUtil.printError(this.errStream,
                         "'--target-dir' is not supported for workspaces", null, true);
                 CommandUtil.exitError(this.exitWhenFinish);
                 return;
             }
-            Workspace workspace;
-            try {
-                workspace = Workspace.load(workspaceRoot.get(), buildOptions);
-                if (buildOptions.dumpBuildTime()) {
-                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-                }
-                validateGraalVmOption(workspace);
-            } catch (ProjectException e) {
-                CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
-                CommandUtil.exitError(this.exitWhenFinish);
-                return;
-            }
-            Path absProjectPath = this.projectPath.toAbsolutePath().normalize();
-            if (workspaceRoot.get().equals(absProjectPath)) {
-                buildWorkspace(workspace, buildOptions);
-            } else {
-                buildSpecificProjectInWorkspace(workspace, absProjectPath);
-            }
-        } else {
-            buildProject(start, buildOptions, isSingleFileBuild);
-        }
 
+            Path absProjectPath = this.projectPath.toAbsolutePath().normalize();
+            if (!workspaceRoot.get().equals(absProjectPath)) {
+                buildSpecificProjectInWorkspace(workspace, absProjectPath);
+                if (this.exitWhenFinish) {
+                    Runtime.getRuntime().exit(0);
+                }
+            }
+        }
+        buildWorkspace(workspace, buildOptions);
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
@@ -321,13 +325,14 @@ public class BuildCommand implements BLauncherCmd {
     }
 
     private void buildWorkspace(Workspace workspace, BuildOptions buildOptions) {
+        boolean isSingleFile = workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT);
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
-                .addTask(new CleanTargetDirTask())
+                .addTask(new CleanTargetDirTask(), isSingleFile)
                 // Run build tools
-                .addTask(new RunBuildToolsTask(outStream))
+                .addTask(new RunBuildToolsTask(outStream), isSingleFile)
                 // resolve maven dependencies in Ballerina.toml
-                .addTask(new ResolveMavenDependenciesTask(outStream))
+                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFile)
                 // compile the modules
                 .addTask(new CompileTask(outStream, errStream, false, true,
                         true, buildOptions.enableCache()))
@@ -337,52 +342,40 @@ public class BuildCommand implements BLauncherCmd {
         taskExecutor.executeTasks(workspace);
     }
 
-    private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
-        // load project
-        Project project;
-        try {
-            if (isSingleFileBuild) {
-                project = SingleFileProject.load(this.projectPath, buildOptions);
-            } else {
-                project = BuildProject.load(this.projectPath, buildOptions);
-            }
-            if (buildOptions.dumpBuildTime()) {
-                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-            }
-        } catch (ProjectException e) {
-            String message = e.getMessage();
-            if (isSingleFileBuild) {
-                message = "failed to load the file: " + message;
-            } else {
-                message = "failed to load the project: " + message;
-            }
-            CommandUtil.printError(this.errStream, message, null, false);
-            CommandUtil.exitError(this.exitWhenFinish);
-            return;
-        }
-        executeTasks(buildOptions, isSingleFileBuild, project, false);
-    }
+//    private void buildProject(long start, BuildOptions buildOptions, boolean isSingleFileBuild) {
+//        Workspace workspace;
+//        try {
+//            workspace = Workspace.load(this.projectPath);
+//        } catch (ProjectException e) {
+//            CommandUtil.printError(this.errStream, "failed to load the Ballerina project: " + e.getMessage(),
+//                    null, false);
+//            CommandUtil.exitError(this.exitWhenFinish);
+//            return;
+//        }
+//
+//        executeTasks(workspace);
+//    }
 
-    private void executeTasks(BuildOptions buildOptions, boolean isSingleFileBuild, Project project,
-                              boolean hasDependents) {
-        validateGraalVmOption(project);
-        boolean isPackageModified = isProjectUpdated(project); // Check package files are modified after last build
-
-        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-                // clean the target directory(projects only)
-                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
-                // Run build tools
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
-                // resolve maven dependencies in Ballerina.toml
-                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
-                // compile the modules
-                .addTask(new CompileTask(outStream, errStream, false, true,
-                        isPackageModified, buildOptions.enableCache()))
-                .addTask(new CreateExecutableTask(outStream, output, null, false), hasDependents)
-                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
-                .build();
-        taskExecutor.executeTasks(project);
-    }
+//    private void executeTasks(BuildOptions buildOptions, boolean isSingleFileBuild, Project project,
+//                              boolean hasDependents) {
+//        validateGraalVmOption(project);
+//        boolean isPackageModified = isProjectUpdated(project); // Check package files are modified after last build
+//
+//        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
+//                // clean the target directory(projects only)
+//                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
+//                // Run build tools
+//                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
+//                // resolve maven dependencies in Ballerina.toml
+//                .addTask(new ResolveMavenDependenciesTask(outStream), isSingleFileBuild)
+//                // compile the modules
+//                .addTask(new CompileTask(outStream, errStream, false, true,
+//                        isPackageModified, buildOptions.enableCache()))
+//                .addTask(new CreateExecutableTask(outStream, output, null, false), hasDependents)
+//                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
+//                .build();
+//        taskExecutor.executeTasks(project);
+//    }
 
     @Override
     public String getName() {

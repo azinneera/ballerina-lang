@@ -20,6 +20,7 @@ package io.ballerina.projects;
 import com.google.gson.JsonSyntaxException;
 import io.ballerina.projects.buildtools.ToolContext;
 import io.ballerina.projects.directory.BuildProject;
+import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.environment.Environment;
 import io.ballerina.projects.environment.EnvironmentBuilder;
 import io.ballerina.projects.environment.ProjectEnvironment;
@@ -28,6 +29,7 @@ import io.ballerina.projects.internal.WorkspaceDependencyGraphBuilder;
 import io.ballerina.projects.internal.WorkspaceManifestBuilder;
 import io.ballerina.projects.internal.model.BuildJson;
 import io.ballerina.projects.util.FileUtils;
+import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.projects.util.ProjectUtils;
 import org.wso2.ballerinalang.util.RepoUtils;
 
@@ -36,9 +38,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static io.ballerina.projects.util.ProjectConstants.BALLERINA_TOML;
@@ -59,7 +63,7 @@ public class Workspace {
     private final WorkspaceBallerinaToml workspaceBallerinaToml;
     private final BuildOptions buildOptions;
     private WorkspaceManifest workspaceManifest;
-    private final Map<PackageId, Map<PackageManifest.Tool.Field, ToolContext>> toolContextMap;
+    private Map<PackageId, Map<PackageManifest.Tool.Field, ToolContext>> toolContextMap;
     private Environment environment;
     private DependencyGraph<ResolvedPackageDependency> dependencyGraph;
 
@@ -74,9 +78,9 @@ public class Workspace {
         this.buildOptions = buildOptions;
         this.workspaceManifest = WorkspaceManifestBuilder.from(tomlDocument, workspaceRoot).manifest();
         this.projectList = new ArrayList<>();
-        this.toolContextMap = new HashMap<>();
         loadProjects();
         this.dependencyGraph = buildDependencyGraph();
+        this.toolContextMap = new HashMap<>();
     }
 
     /**
@@ -95,6 +99,18 @@ public class Workspace {
         this.dependencyGraph = buildDependencyGraph();
     }
 
+    private Workspace(Path projectPath, boolean isSingleFile) {
+        this.environment = EnvironmentBuilder.getBuilder().build();
+        Project project = loadProject(projectPath, BuildOptions.builder().build(), isSingleFile);
+        this.workspaceRoot = project.sourceRoot;
+        this.workspaceBallerinaToml = null;
+        this.buildOptions = project.buildOptions();
+        this.workspaceManifest = null;
+        this.projectList = Collections.singletonList(project);
+        this.dependencyGraph = buildDependencyGraph();
+        this.toolContextMap = new HashMap<>();
+    }
+
     /**
      * Creates a workspace from the given directory.
      *
@@ -105,6 +121,7 @@ public class Workspace {
         return load(workspacePath, BuildOptions.builder().build());
     }
 
+
     /**
      * Creates a workspace from the given directory.
      *
@@ -112,20 +129,37 @@ public class Workspace {
      * @return A Workspace created from the given directory
      */
     public static Workspace load(Path workspacePath, BuildOptions buildOptions) {
+        if (FileUtils.hasExtension(workspacePath)) {
+            if (ProjectPaths.isBalFile(workspacePath)) {
+                return new Workspace(workspacePath, true);
+            }
+            throw new ProjectException("Provided path is not a Ballerina source file: "
+                    + workspacePath.toAbsolutePath());
+        }
         // Validate the presence of BalWorkspace.toml
         Path workspaceConfig = workspacePath.resolve(BALLERINA_TOML);
         if (Files.notExists(workspaceConfig)) {
-            throw new ProjectException("No " + BALLERINA_TOML + " found in the specified workspace directory: "
-                    + workspacePath.toAbsolutePath());
+            throw new ProjectException("Provided path is not a valid Ballerina project: "
+                    + workspacePath.toAbsolutePath() + ". Missing '" + BALLERINA_TOML + "' file.");
         }
-        try {
-            TomlDocument tomlDocument = TomlDocument.from(BALLERINA_TOML,
-                    Files.readString(workspacePath.resolve(BALLERINA_TOML)));
-            return new Workspace(workspacePath, tomlDocument, buildOptions);
-        } catch (IOException e) {
-            throw new ProjectException("Error reading " + BALLERINA_TOML + " file in workspace: "
-                    + workspacePath.toAbsolutePath(), e);
+        if (ProjectPaths.isWorkspaceRoot(workspacePath)) {
+            try {
+                TomlDocument tomlDocument = TomlDocument.from(BALLERINA_TOML,
+                        Files.readString(workspacePath.resolve(BALLERINA_TOML)));
+                return new Workspace(workspacePath, tomlDocument, buildOptions);
+            } catch (IOException e) {
+                throw new ProjectException("Error reading " + BALLERINA_TOML + " file in workspace: "
+                        + workspacePath.toAbsolutePath(), e);
+            }
         }
+
+        if (ProjectPaths.isPackageRoot(workspacePath)) {
+            // If the given path is a package root, load the project directly
+            return new Workspace(workspacePath, false);
+        }
+
+        // If the given path is not a workspace root or package root, throw an exception
+        throw new ProjectException("The specified path is neither a valid project: " + workspacePath.toAbsolutePath());
     }
 
     /**
@@ -141,8 +175,8 @@ public class Workspace {
         return workspaceRoot;
     }
 
-    public WorkspaceBallerinaToml ballerinaToml() {
-        return workspaceBallerinaToml;
+    public Optional<WorkspaceBallerinaToml> ballerinaToml() {
+        return Optional.ofNullable(workspaceBallerinaToml);
     }
 
     public WorkspaceManifest workspaceManifest() {
@@ -179,14 +213,18 @@ public class Workspace {
         for (Path packagePath : this.workspaceManifest.packages()) {
             Path ballerinaTomlPath = packagePath.resolve(BALLERINA_TOML);
             if (Files.exists(ballerinaTomlPath)) {
-                BuildProject project = loadProject(packagePath, environment(), this.buildOptions);
+                Project project = loadProject(packagePath, this.buildOptions, false);
                 this.projectList.add(project);
             }
         }
     }
 
-    private BuildProject loadProject(Path packagePath, Environment environment, BuildOptions buildOptions) {
-        ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment);
+    private Project loadProject(Path packagePath, BuildOptions buildOptions,
+                                     boolean isSingleFile) {
+        ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment());
+        if (isSingleFile) {
+            return SingleFileProject.load(environmentBuilder, packagePath, buildOptions, this);
+        }
         return BuildProject.load(environmentBuilder, packagePath, buildOptions, this);
     }
 
@@ -211,6 +249,7 @@ public class Workspace {
         WorkspaceDependencyGraphBuilder graphBuilder = new WorkspaceDependencyGraphBuilder();
         for (Project project : this.projectList) {
             Package pkg = project.currentPackage();
+            graphBuilder.addPackage(pkg);
             Collection<ResolvedPackageDependency> directDependencies = pkg
                     .getResolution(ResolutionOptions.builder().setOffline(true).build())
                     .dependencyGraph()
@@ -233,12 +272,12 @@ public class Workspace {
     }
 
     public ProjectKind kind() {
-        if (this.projectList.stream().findFirst().isEmpty() ||
-                this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.WORKSPACE_PROJECT))) {
+        if (this.projectList.size() > 1) {
             return ProjectKind.WORKSPACE_PROJECT;
-        } else if (this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.BUILD_PROJECT))) {
+        }
+        if (this.projectList.get(0).kind().equals(ProjectKind.BUILD_PROJECT)) {
             return ProjectKind.BUILD_PROJECT;
-        } else if (this.projectList.stream().allMatch(project -> project.kind().equals(ProjectKind.BALA_PROJECT))) {
+        } else if (this.projectList.get(0).kind().equals(ProjectKind.BALA_PROJECT)) {
             return ProjectKind.BALA_PROJECT;
         }
         return ProjectKind.SINGLE_FILE_PROJECT;
@@ -322,6 +361,14 @@ public class Workspace {
     }
 
     public void removePackage(PackageDescriptor descriptor) {
+        if (kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
+            throw new UnsupportedOperationException("Cannot remove packages from a single file project");
+        }
+
+        if (kind().equals(ProjectKind.BALA_PROJECT)) {
+            throw new ProjectException("Cannot add packages from a BALA project");
+        }
+
         Project project = this.projectList.stream().filter(prj -> prj.currentPackage().descriptor()
                 .equals(descriptor)).findFirst().orElseThrow(() -> new ProjectException(
                 "Package with ID '" + descriptor + "' not found in workspace"));
@@ -344,7 +391,15 @@ public class Workspace {
     }
 
     public void addPackage(PackageConfig packageConfig) {
-        Project project = loadProject(packageConfig.packagePath(), environment, buildOptions);
+        if (kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
+            throw new UnsupportedOperationException("Cannot add packages to a single file project");
+        }
+
+        if (kind().equals(ProjectKind.BALA_PROJECT)) {
+            throw new ProjectException("Cannot add packages to a BALA project");
+        }
+
+        Project project = loadProject(packageConfig.packagePath(), buildOptions, false);
 
         if (this.projectList.stream().anyMatch(prj -> prj.currentPackage().packageId()
                 .equals(packageConfig.packageId()))) {
@@ -363,7 +418,7 @@ public class Workspace {
 
         private Modifier(Workspace oldWorkspace) {
             this.workspace = oldWorkspace;
-            this.workspaceBallerinaToml = oldWorkspace.ballerinaToml();
+            this.workspaceBallerinaToml = oldWorkspace.ballerinaToml().orElseThrow();
             this.projectsList = oldWorkspace.projectList;
             this.dependencyGraph = oldWorkspace.dependencyGraph();
         }
@@ -374,8 +429,8 @@ public class Workspace {
         }
 
         public Modifier addPackage(PackageConfig packageConfig) {
-            Project project = workspace.loadProject(packageConfig.packagePath(), workspace.environment(),
-                    workspace.buildOptions);
+            Project project = workspace.loadProject(packageConfig.packagePath(),
+                    workspace.buildOptions, false);
 
             if (this.projectsList.stream().anyMatch(prj -> prj.currentPackage().packageId()
                     .equals(packageConfig.packageId()))) {

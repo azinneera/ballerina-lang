@@ -163,7 +163,7 @@ public class CompileTask implements Task {
             for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
                 PackageDescriptor packageDescriptor = packageDependency.packageInstance().descriptor();
                 // Print the source
-                printPackageInfo(ProjectKind.WORKSPACE_PROJECT, workspace.getPackage(packageDescriptor));
+                printPackageInfo(workspace.kind(), workspace.getPackage(packageDescriptor));
                 // Validate the source
                 validateProject(workspace.getPackage(packageDescriptor));
                 // Get the package resolution

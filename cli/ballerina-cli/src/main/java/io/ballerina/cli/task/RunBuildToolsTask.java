@@ -31,6 +31,7 @@ import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageId;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.buildtools.CodeGeneratorTool;
 import io.ballerina.projects.buildtools.ToolContext;
@@ -123,8 +124,10 @@ public class RunBuildToolsTask implements Task {
             PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(
                     workspace.sourceRoot(packageDescriptor),
                     workspace.buildOptions(packageDescriptor).disableSyntaxTree());
-            workspace.removePackage(packageDescriptor);
-            workspace.addPackage(packageConfig);
+            if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
+                workspace.removePackage(packageDescriptor);
+                workspace.addPackage(packageConfig);
+            }
         }
     }
 
@@ -247,13 +250,6 @@ public class RunBuildToolsTask implements Task {
         Thread.currentThread().setContextClassLoader(ClassLoader.getSystemClassLoader());
         this.outStream.println();
     }
-
-//    private void reloadPackage(Workspace workspace, PackageId packageId) {
-//        PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(
-//                workspace.sourceRoot(packageId),
-//                workspace.buildOptions(packageId).disableSyntaxTree());
-//        workspace.modify().removePackage(packageId).addPackage(packageConfig);
-//    }
 
     private boolean validateOptionsToml(Toml optionsToml, Tool.Field toolType, ClassLoader toolClassLoader)
             throws IOException {

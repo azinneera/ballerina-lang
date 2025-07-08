@@ -21,6 +21,7 @@ package io.ballerina.cli.task;
 import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
@@ -71,25 +72,25 @@ public class CleanTargetDirTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
-        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
-                dependencyGraph.toTopologicallySortedList());
-        if (this.absProjectPath != null) {
-            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
-                    dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
-                            .equals(this.absProjectPath))
-                    .findFirst().orElseThrow();
-            topologicallySortedList.removeIf(pkg ->
-                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
-                            && !pkg.equals(packageDependency));
-        }
-        for (ResolvedPackageDependency resolvedPackageDependency : topologicallySortedList) {
-            try {
+        try {
+            DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
+            List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+                    dependencyGraph.toTopologicallySortedList());
+            if (this.absProjectPath != null) {
+                ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
+                                dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                                        .equals(this.absProjectPath))
+                        .findFirst().orElseThrow();
+                topologicallySortedList.removeIf(pkg ->
+                        !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                                && !pkg.equals(packageDependency));
+            }
+            for (ResolvedPackageDependency resolvedPackageDependency : topologicallySortedList) {
                 Target target = new Target(workspace.target(resolvedPackageDependency.packageInstance().descriptor()));
                 target.clean();
-            } catch (IOException | ProjectException e) {
-                throw createLauncherException("unable to clean the target directory: " + e.getMessage());
             }
+        } catch (IOException | ProjectException e) {
+            throw createLauncherException("unable to clean the target directory: " + e.getMessage());
         }
     }
 }

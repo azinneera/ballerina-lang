@@ -393,12 +393,13 @@ public final class ProjectPaths {
     }
 
     public static Optional<Path> findWorkspaceRoot(Path filePath) {
-        if (isWorkspaceRoot(filePath)) {
-            return Optional.of(filePath);
+        Path absFilePath = filePath.toAbsolutePath().normalize();
+        if (isWorkspaceRoot(absFilePath)) {
+            return Optional.of(absFilePath);
         }
         Path packageRoot;
         try {
-            packageRoot = packageRoot(filePath).toAbsolutePath().normalize();
+            packageRoot = packageRoot(absFilePath);
         } catch (ProjectException e) {
             // the filepath does not belong to a package
             return Optional.empty();

@@ -28,6 +28,7 @@ import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.BalaFiles;
 import io.ballerina.projects.internal.PackageConfigCreator;
 import io.ballerina.projects.repos.TempDirCompilationCache;
@@ -56,7 +57,7 @@ public class BalaProject extends Project {
     public static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath) {
         PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
         BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, BuildOptions.builder().setSticky(true)
-                .build());
+                .build(), null);
         balaProject.addPackage(packageConfig);
         return balaProject;
     }
@@ -64,13 +65,22 @@ public class BalaProject extends Project {
     public static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath,
                                           BuildOptions buildOptions) {
         PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
-        BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, buildOptions);
+        BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, buildOptions, null);
         balaProject.addPackage(packageConfig);
         return balaProject;
     }
 
-    private BalaProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath, BuildOptions buildOptions) {
-        super(ProjectKind.BALA_PROJECT, balaPath, environmentBuilder, buildOptions);
+    public static BalaProject loadProject(Workspace workspace, ProjectEnvironmentBuilder environmentBuilder,
+                                          Path balaPath, BuildOptions buildOptions) {
+        PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
+        BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, buildOptions, workspace);
+        balaProject.addPackage(packageConfig);
+        return balaProject;
+    }
+
+    private BalaProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath, BuildOptions buildOptions,
+                        Workspace workspace) {
+        super(ProjectKind.BALA_PROJECT, balaPath, environmentBuilder, buildOptions, workspace);
         this.platform = BalaFiles.readPackageJson(balaPath).getPlatform();
         this.balaVersion = BalaFiles.readBalaJson(balaPath).getBala_version();
     }
@@ -88,7 +98,8 @@ public class BalaProject extends Project {
         ProjectEnvironmentBuilder projectEnvironmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
         projectEnvironmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
         BuildOptions duplicateBuildOptions = BuildOptions.builder().build().acceptTheirs(buildOptions());
-        BalaProject balaProject = new BalaProject(projectEnvironmentBuilder, this.sourceRoot, duplicateBuildOptions);
+        BalaProject balaProject = new BalaProject(projectEnvironmentBuilder, this.sourceRoot, duplicateBuildOptions,
+                this.workspace);
         return resetPackage(balaProject);
     }
 
