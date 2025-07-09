@@ -32,6 +32,10 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 public class CleanTargetBinTestsDirTask implements Task {
     @Override
     public void execute(Project project) {
+        boolean isTestingDelegated = project.buildOptions().cloud().equals("docker");
+        if (isTestingDelegated) {
+            return;
+        }
         try {
             Target target = new Target(project.targetDir());
             target.cleanBinTests();

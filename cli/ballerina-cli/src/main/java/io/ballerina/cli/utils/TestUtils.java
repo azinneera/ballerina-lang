@@ -94,27 +94,27 @@ public final class TestUtils {
     private TestUtils() {
     }
 
-    public static void generateCoverage(Project project, TestReport testReport, JBallerinaBackend jBallerinaBackend,
+    public static void generateCoverage(Package pkg, TestReport testReport, JBallerinaBackend jBallerinaBackend,
                                         String includesInCoverage, String coverageReportFormat,
                                         Map<String, Module> coverageModules, Set<String> exclusionClassList)
             throws IOException {
         // Generate code coverage
-        if (!project.buildOptions().codeCoverage()) {
+        if (!pkg.workspace().buildOptions(pkg.descriptor()).codeCoverage()) {
             return;
         }
         if (testReport == null) { // This to avoid the spotbugs failure.
             return;
         }
 
-        Map<String, ModuleCoverage> moduleCoverageMap = initializeCoverageMap(project);
+        Map<String, ModuleCoverage> moduleCoverageMap = initializeCoverageMap(pkg);
         // Following lists will hold the coverage information needed for the coverage XML file generation.
         List<ISourceFileCoverage> packageSourceCoverageList = new ArrayList<>();
         List<IClassCoverage> packageNativeClassCoverageList = new ArrayList<>();
         List<IClassCoverage> packageBalClassCoverageList = new ArrayList<>();
         List<ExecutionData> packageExecData = new ArrayList<>();
         List<SessionInfo> packageSessionInfo = new ArrayList<>();
-        for (ModuleId moduleId : project.currentPackage().moduleIds()) {
-            Module module = project.currentPackage().module(moduleId);
+        for (ModuleId moduleId : pkg.moduleIds()) {
+            Module module = pkg.module(moduleId);
             CoverageReport coverageReport = new CoverageReport(module, moduleCoverageMap,
                     packageNativeClassCoverageList, packageBalClassCoverageList, packageSourceCoverageList,
                     packageExecData, packageSessionInfo);
@@ -130,7 +130,7 @@ public final class TestUtils {
         if (CodeCoverageUtils.isRequestedReportFormat(coverageReportFormat,
                 TesterinaConstants.JACOCO_XML_FORMAT)) {
             // Generate coverage XML report
-            CodeCoverageUtils.createXMLReport(project, packageExecData, packageNativeClassCoverageList,
+            CodeCoverageUtils.createXMLReport(pkg, packageExecData, packageNativeClassCoverageList,
                     packageBalClassCoverageList, packageSourceCoverageList, packageSessionInfo);
         }
     }
@@ -138,13 +138,13 @@ public final class TestUtils {
     /**
      * Initialize coverage map used for aggregating module wise coverage.
      *
-     * @param project Project
+     * @param pkg Package instance
      * @return Map<String, ModuleCoverage>
      */
-    private static Map<String, ModuleCoverage> initializeCoverageMap(Project project) {
+    private static Map<String, ModuleCoverage> initializeCoverageMap(Package pkg) {
         Map<String, ModuleCoverage> moduleCoverageMap = new HashMap<>();
-        for (ModuleId moduleId : project.currentPackage().moduleIds()) {
-            Module module = project.currentPackage().module(moduleId);
+        for (ModuleId moduleId : pkg.moduleIds()) {
+            Module module = pkg.module(moduleId);
             moduleCoverageMap.put(module.moduleName().toString(), new ModuleCoverage());
         }
         return moduleCoverageMap;
@@ -156,9 +156,10 @@ public final class TestUtils {
      * @param out        PrintStream object to print messages to console
      * @param testReport Data that are parsed to the json
      */
-    public static void generateTesterinaReports(Project project, TestReport testReport, PrintStream out, Target target)
+    public static void generateTesterinaReports(Package pkg, TestReport testReport, PrintStream out, Target target)
             throws IOException {
-        if (!project.buildOptions().testReport() && !project.buildOptions().codeCoverage()) {
+        if (!pkg.workspace().buildOptions(pkg.descriptor()).testReport()
+                && !pkg.workspace().buildOptions(pkg.descriptor()).codeCoverage()) {
             return;
         }
         if (testReport.getModuleStatus().size() <= 0) {
@@ -172,14 +173,13 @@ public final class TestUtils {
 
         // Set projectName in test report
         String projectName;
-        if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
-            projectName = ProjectUtils.getJarFileName(project.currentPackage().getDefaultModule())
-                    + ProjectConstants.BLANG_SOURCE_EXT;
+        if (pkg.workspace().kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+            projectName = ProjectUtils.getJarFileName(pkg.getDefaultModule()) + ProjectConstants.BLANG_SOURCE_EXT;
         } else {
-            projectName = project.currentPackage().packageName().toString();
+            projectName = pkg.packageName().toString();
         }
         testReport.setProjectName(projectName);
-        testReport.finalizeTestResults(project.buildOptions().codeCoverage());
+        testReport.finalizeTestResults(pkg.workspace().buildOptions(pkg.descriptor()).codeCoverage());
 
         Gson gson = new Gson();
         String json = gson.toJson(testReport);
@@ -193,7 +193,7 @@ public final class TestUtils {
         }
 
         // Dump the Testerina html report only if '--test-report' flag is provided
-        if (project.buildOptions().testReport()) {
+        if (pkg.workspace().buildOptions(pkg.descriptor()).testReport()) {
             Path reportZipPath = getReportToolsPath();
             if (Files.exists(reportZipPath)) {
                 String content;
@@ -281,7 +281,7 @@ public final class TestUtils {
 
     /**
      * Create test suites for the project.
-     * @param project Project
+     * @param pkg package instance
      * @param target Target
      * @param testProcessor Test processor to create test suites
      * @param testSuiteMap  Test suite map that is used to store test suites
@@ -292,14 +292,13 @@ public final class TestUtils {
      * @param coverage  Whether to generate coverage
      * @return                    Whether the project has tests
      */
-    public static boolean createTestSuitesForProject(Project project, Target target, TestProcessor testProcessor,
+    public static boolean createTestSuitesForProject(Package pkg, Target target, TestProcessor testProcessor,
                                                      Map<String, TestSuite> testSuiteMap, List<String> moduleNamesList,
                                                      List<String> mockClassNames, boolean isRerunTestExecution,
                                                      boolean report, boolean coverage) {
         boolean hasTests = false;
-        for (ModuleDescriptor moduleDescriptor :
-                project.currentPackage().moduleDependencyGraph().toTopologicallySortedList()) {
-            Module module = project.currentPackage().module(moduleDescriptor.name());
+        for (ModuleDescriptor moduleDescriptor : pkg.moduleDependencyGraph().toTopologicallySortedList()) {
+            Module module = pkg.module(moduleDescriptor.name());
             ModuleName moduleName = module.moduleName();
 
             TestSuite suite = testProcessor.testSuite(module).orElse(null);
@@ -312,8 +311,9 @@ public final class TestUtils {
             if (!isRerunTestExecution) {
                 clearFailedTestsJson(target.path());
             }
-            if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
-                Optional<Path> sourceRootFileName = Optional.ofNullable(project.sourceRoot().getFileName());
+            if (pkg.workspace().kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+                Optional<Path> sourceRootFileName = Optional.ofNullable(
+                        pkg.workspace().sourceRoot(pkg.descriptor()).getFileName());
                 if (sourceRootFileName.isPresent()) {
                     suite.setSourceFileName(sourceRootFileName.get().toString());
                 } else {
@@ -356,8 +356,8 @@ public final class TestUtils {
         }
     }
 
-    public static void cleanTempCache(Project project, Path cachesRoot) {
-        if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+    public static void cleanTempCache(Package pkg, Path cachesRoot) {
+        if (pkg.workspace().kind() == ProjectKind.SINGLE_FILE_PROJECT) {
             ProjectUtils.deleteDirectory(cachesRoot);
         }
     }
@@ -582,4 +582,6 @@ public final class TestUtils {
         }
         return moduleJarPaths;
     }
+
+
 }

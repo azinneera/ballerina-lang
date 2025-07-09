@@ -20,6 +20,8 @@ import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.BuildUtils;
 import io.ballerina.cli.utils.NativeUtils;
 import io.ballerina.cli.utils.TestUtils;
+import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.EmitResult;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JarLibrary;
@@ -27,11 +29,15 @@ import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Module;
 import io.ballerina.projects.ModuleDescriptor;
 import io.ballerina.projects.ModuleName;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.TestEmitArgs;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.tools.diagnostics.Diagnostic;
@@ -78,9 +84,17 @@ public class CreateTestExecutableTask implements Task {
     private final boolean listGroups;
     private final List<String> cliArgs;
     private final boolean isParallelExecution;
+    private Path projectPath;
 
     public CreateTestExecutableTask(PrintStream out, String groupList, String disableGroupList, String singleExecTests,
                                     boolean listGroups, String[] cliArgs, boolean isParallelExecution) {
+        this(out, groupList, disableGroupList, singleExecTests, listGroups, cliArgs,
+                isParallelExecution, null);
+    }
+
+    public CreateTestExecutableTask(PrintStream out, String groupList, String disableGroupList, String singleExecTests,
+                                    boolean listGroups, String[] cliArgs, boolean isParallelExecution,
+                                    Path projectPath) {
         this.out = out;
         this.groupList = groupList;
         this.disableGroupList = disableGroupList;
@@ -91,34 +105,67 @@ public class CreateTestExecutableTask implements Task {
         this.listGroups = listGroups;
         this.cliArgs = List.of(cliArgs);
         this.isParallelExecution = isParallelExecution;
+        this.projectPath = projectPath;
+    }
+
+    @Override
+    public void execute(Workspace workspace) {
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.projectPath != null) {
+            PackageDescriptor packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency)
+                                    .equals(this.projectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                            && !pkg.equals(packageDependency));
+        }
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            try {
+                execute(workspace.getPackage(descriptor), new Target(workspace.target(descriptor)));
+            } catch (ProjectException | IOException e) {
+                throw createLauncherException("unable to create test executable: " + e.getMessage());
+            }
+        }
+
     }
 
     @Override
     public void execute(Project project) {
-        Target target = getTarget(project);
+        execute(project.currentPackage(), getTarget(project));
+    }
+
+    public void execute(Package pkg, Target target) {
+        BuildOptions buildOptions = pkg.workspace().buildOptions(pkg.descriptor());
+        boolean isTestingDelegated = buildOptions.cloud().equals("docker");
+        if (!isTestingDelegated) {
+            return;
+        }
+
         try {
-            PackageCompilation pkgCompilation = project.currentPackage().getCompilation();
+            PackageCompilation pkgCompilation = pkg.getCompilation();
             JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(pkgCompilation, JvmTarget.JAVA_21);
             List<Diagnostic> emitDiagnostics = new ArrayList<>();
             Path testCachePath = target.getTestsCachePath();
             long start = 0;
-            if (project.buildOptions().dumpBuildTime()) {
+            if (buildOptions.dumpBuildTime()) {
                 start = System.currentTimeMillis();
             }
             HashSet<JarLibrary> testExecDependencies = new HashSet<>();
             Map<String, TestSuite> testSuiteMap = new HashMap<>();
 
             // Create and Write the test suite json that is used to execute the tests
-            boolean suiteCreated = createTestSuiteForCloudArtifacts(project, jBallerinaBackend, target, testSuiteMap);
+            boolean suiteCreated = createTestSuiteForCloudArtifacts(pkg, jBallerinaBackend, target, testSuiteMap);
 
             if (suiteCreated) {
                 // Write the cmd args to a file, so it can be read on c2c side
                 writeCmdArgsToFile(getTestExecutableBasePath(target),
                         target, TestUtils.getJsonFilePath(testCachePath));
 
-                if (project.buildOptions().nativeImage()) {
-                    NativeUtils.createReflectConfig(target.getNativeConfigPath(),
-                            project.currentPackage(), testSuiteMap);
+                if (buildOptions.nativeImage()) {
+                    NativeUtils.createReflectConfig(target.getNativeConfigPath(), pkg, testSuiteMap);
                     // Traverse the map and check if a suite has mock functions
                     boolean hasMockFunctions = false;
                     for (Map.Entry<String, TestSuite> entry : testSuiteMap.entrySet()) {
@@ -128,17 +175,17 @@ public class CreateTestExecutableTask implements Task {
                         }
                     }
                     if (hasMockFunctions) {
-                        perModuleFatJarGeneration(testSuiteMap, target, jBallerinaBackend, emitDiagnostics, project);
+                        perModuleFatJarGeneration(testSuiteMap, target, jBallerinaBackend, emitDiagnostics, pkg);
                     } else {
-                        standaloneFatJarGeneration(project, jBallerinaBackend, target, testExecDependencies,
+                        standaloneFatJarGeneration(pkg, jBallerinaBackend, target, testExecDependencies,
                                 testCachePath, emitDiagnostics);
                     }
                 } else {
-                    standaloneFatJarGeneration(project, jBallerinaBackend, target, testExecDependencies,
+                    standaloneFatJarGeneration(pkg, jBallerinaBackend, target, testExecDependencies,
                             testCachePath, emitDiagnostics);
                 }
             }
-            if (project.buildOptions().dumpBuildTime()) {
+            if (buildOptions.dumpBuildTime()) {
                 BuildTime.getInstance().emitArtifactDuration = System.currentTimeMillis() - start;
                 BuildTime.getInstance().compile = false;
             }
@@ -147,7 +194,7 @@ public class CreateTestExecutableTask implements Task {
             if (!jBallerinaBackend.conflictedJars().isEmpty()) {
                 out.println("\twarning: Detected conflicting jar files:");
                 for (JBallerinaBackend.JarConflict conflict : jBallerinaBackend.conflictedJars()) {
-                    out.println(conflict.getWarning(project.buildOptions().listConflictedClasses()));
+                    out.println(conflict.getWarning(buildOptions.listConflictedClasses()));
                 }
             }
             if (!emitDiagnostics.isEmpty()) {
@@ -159,25 +206,26 @@ public class CreateTestExecutableTask implements Task {
         // notify plugin
         // todo following call has to be refactored after introducing new plugin architecture
         // Similar case as in CreateExecutableTask.java
-        BuildUtils.notifyPlugins(project, target);
-        TestUtils.cleanTempCache(project, target.path());
+        BuildUtils.notifyPlugins(pkg, target);
+        TestUtils.cleanTempCache(pkg, target.path());
     }
 
-    private void standaloneFatJarGeneration(Project project, JBallerinaBackend jBallerinaBackend, Target target,
+    private void standaloneFatJarGeneration(Package pkg, JBallerinaBackend jBallerinaBackend, Target target,
                                            HashSet<JarLibrary> testExecDependencies, Path testCachePath,
                                             List<Diagnostic> emitDiagnostics) throws IOException {
         // Get all the dependencies required for test execution for each module
         for (ModuleDescriptor moduleDescriptor :
-                project.currentPackage().moduleDependencyGraph().toTopologicallySortedList()) {
-            Module module = project.currentPackage().module(moduleDescriptor.name());
+                pkg.moduleDependencyGraph().toTopologicallySortedList()) {
+            Module module = pkg.module(moduleDescriptor.name());
             testExecDependencies.addAll(jBallerinaBackend.jarResolver()
                     .getJarFilePathsRequiredForTestExecution(module.moduleName())
             );
         }
 
-        String jarName = project.currentPackage().packageName().toString();
+        String jarName = pkg.packageName().toString();
         if (jarName.equals(ProjectConstants.DOT)) {
-            Optional<Path> projectSourceRootFileName = Optional.ofNullable(project.sourceRoot().getFileName());
+            Optional<Path> projectSourceRootFileName = Optional.ofNullable(
+                    pkg.workspace().sourceRoot(pkg.descriptor()).getFileName());
             if (projectSourceRootFileName.isPresent()) {
                 jarName = getFileNameWithoutExtension(projectSourceRootFileName.get());
             } else {
@@ -188,7 +236,7 @@ public class CreateTestExecutableTask implements Task {
         Path testExecutablePath = getTestExecutableBasePath(target).resolve(
                 jarName + ProjectConstants.TEST_UBER_JAR_SUFFIX + ProjectConstants.BLANG_COMPILED_JAR_EXT);
 
-        List<Path> moduleJarPaths = TestUtils.getModuleJarPaths(jBallerinaBackend, project.currentPackage());
+        List<Path> moduleJarPaths = TestUtils.getModuleJarPaths(jBallerinaBackend, pkg);
         List<String> excludedClasses = new ArrayList<>();
         for (Path moduleJarPath : moduleJarPaths) {
             try (ZipFile zipFile = new ZipFile(moduleJarPath.toFile())) {
@@ -211,7 +259,7 @@ public class CreateTestExecutableTask implements Task {
 
     private void perModuleFatJarGeneration(Map<String, TestSuite> testSuiteMap, Target target,
                                            JBallerinaBackend jBallerinaBackend, List<Diagnostic> emitDiagnostics,
-                                           Project project)
+                                           Package pkg)
             throws IOException {
         // Clone the map to the count of test suites
         List<Map<String, TestSuite>> clonedMaps = new ArrayList<>();
@@ -221,14 +269,13 @@ public class CreateTestExecutableTask implements Task {
             clonedMaps.add(clonedMap);
         });
 
-        List<ModuleName> moduleNames = project.currentPackage().moduleDependencyGraph()
+        List<ModuleName> moduleNames = pkg.moduleDependencyGraph()
                 .toTopologicallySortedList().stream().map(ModuleDescriptor::name).toList();
         // Modify the relevant jars of each test suite
         for (Map<String, TestSuite> clonedMap : clonedMaps) {
             TestSuite testSuite = clonedMap.values().toArray(new TestSuite[0])[0];
             String moduleName = testSuite.getPackageID();
-            NativeUtils.createReflectConfig(target.getNativeConfigPath(),
-                    project.currentPackage(), clonedMap);    // Rewrite the reflect config for each module
+            NativeUtils.createReflectConfig(target.getNativeConfigPath(), pkg, clonedMap);    // Rewrite the reflect config for each module
             try {
                 modifyJarForFunctionMock(testSuite, target, moduleName);
             } catch (IOException e) {
@@ -299,12 +346,12 @@ public class CreateTestExecutableTask implements Task {
         }
     }
 
-    private boolean createTestSuiteForCloudArtifacts(Project project, JBallerinaBackend jBallerinaBackend,
+    private boolean createTestSuiteForCloudArtifacts(Package pkg, JBallerinaBackend jBallerinaBackend,
                                                      Target target, Map<String, TestSuite> testSuiteMap) {
         TestProcessor testProcessor = new TestProcessor(jBallerinaBackend.jarResolver());
         List<String> moduleNamesList = new ArrayList<>();
         List<String> mockClassNames = new ArrayList<>();
-        boolean hasTests = createTestSuitesForProject(project, target, testProcessor, testSuiteMap, moduleNamesList,
+        boolean hasTests = createTestSuitesForProject(pkg, target, testProcessor, testSuiteMap, moduleNamesList,
                 mockClassNames, this.isRerunTestExecution, this.report, this.coverage);
         if (hasTests) {
             // Now write the map to a json file

@@ -29,10 +29,10 @@ import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 
@@ -78,14 +78,13 @@ public class CreateExecutableTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
-        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
                 dependencyGraph.toTopologicallySortedList());
-        ResolvedPackageDependency rootPackage;
+        PackageDescriptor rootPackage;
         if (this.projectPath != null) {
             rootPackage = topologicallySortedList.stream().filter(
-                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
-                                    .equals(this.projectPath))
+                            dependency -> workspace.sourceRoot(dependency).equals(this.projectPath))
                     .findFirst().orElseThrow();
             topologicallySortedList.removeIf(pkg ->
                     !dependencyGraph.getAllDependencies(rootPackage).contains(pkg)
@@ -93,18 +92,16 @@ public class CreateExecutableTask implements Task {
         } else {
             rootPackage = null;
         }
-        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
+        for (PackageDescriptor descriptor : topologicallySortedList) {
             if(this.projectPath != null) {
-                if(!packageDependency.equals(rootPackage)) {
+                if(!descriptor.equals(rootPackage)) {
                     continue;
                 }
-            } else if (!dependencyGraph.getAllDependents(packageDependency).isEmpty()) {
+            } else if (!dependencyGraph.getAllDependents(descriptor).isEmpty()) {
                 continue;
             }
-            execute(packageDependency.packageInstance(),
-                    workspace.buildOptions(packageDependency.packageInstance().descriptor()),
-                    workspace.sourceRoot(packageDependency.packageInstance().descriptor()),
-                    workspace.target(packageDependency.packageInstance().descriptor()));
+            execute(workspace.getPackage(descriptor), workspace.buildOptions(descriptor),
+                    workspace.sourceRoot(descriptor), workspace.target(descriptor));
         }
     }
 

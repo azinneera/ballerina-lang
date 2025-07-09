@@ -19,6 +19,7 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.projects.DependencyGraph;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
@@ -73,20 +74,20 @@ public class CleanTargetDirTask implements Task {
     @Override
     public void execute(Workspace workspace) {
         try {
-            DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-            List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+            DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+            List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
                     dependencyGraph.toTopologicallySortedList());
             if (this.absProjectPath != null) {
-                ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
-                                dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
+                PackageDescriptor descriptor = topologicallySortedList.stream().filter(
+                                dependency -> workspace.sourceRoot(dependency)
                                         .equals(this.absProjectPath))
                         .findFirst().orElseThrow();
                 topologicallySortedList.removeIf(pkg ->
-                        !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
-                                && !pkg.equals(packageDependency));
+                        !dependencyGraph.getAllDependencies(descriptor).contains(pkg)
+                                && !pkg.equals(descriptor));
             }
-            for (ResolvedPackageDependency resolvedPackageDependency : topologicallySortedList) {
-                Target target = new Target(workspace.target(resolvedPackageDependency.packageInstance().descriptor()));
+            for (PackageDescriptor descriptor : topologicallySortedList) {
+                Target target = new Target(workspace.target(descriptor));
                 target.clean();
             }
         } catch (IOException | ProjectException e) {

@@ -22,6 +22,7 @@ import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.GraalVMCompatibilityUtils;
 import io.ballerina.cli.utils.NativeUtils;
 import io.ballerina.cli.utils.TestUtils;
+import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JarResolver;
 import io.ballerina.projects.JvmTarget;
@@ -33,6 +34,7 @@ import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
 import org.ballerinalang.test.runtime.entity.ModuleStatus;
@@ -101,6 +103,7 @@ public class RunNativeImageTestTask implements Task {
     private boolean report;
     private boolean coverage;
     private final boolean isRerunTestExecution;
+    private final Path projectPath;
     private String singleExecTests;
     private final boolean listGroups;
     private final boolean  isParallelExecution;
@@ -108,8 +111,14 @@ public class RunNativeImageTestTask implements Task {
     TestReport testReport;
 
     public RunNativeImageTestTask(PrintStream out, boolean rerunTests, String groupList,
-                                  String disableGroupList, String testList, String includes, String coverageFormat,
-                                  Map<String, Module> modules, boolean listGroups, boolean isParallelExecution) {
+                                  String disableGroupList, String testList,
+                                  boolean listGroups, boolean isParallelExecution) {
+        this(out, rerunTests, groupList, disableGroupList, testList, listGroups, isParallelExecution, null);
+    }
+
+    public RunNativeImageTestTask(PrintStream out, boolean rerunTests, String groupList,
+                                  String disableGroupList, String testList,
+                                  boolean listGroups, boolean isParallelExecution, Path projectPath) {
         this.out = out;
         this.isRerunTestExecution = rerunTests;
 
@@ -124,23 +133,16 @@ public class RunNativeImageTestTask implements Task {
         }
         this.listGroups = listGroups;
         this.isParallelExecution = isParallelExecution;
+        this.projectPath = projectPath;
+    }
+
+    @Override
+    public void execute(Workspace workspace) {
+        
     }
 
     @Override
     public void execute(Project project) {
-        long start = 0;
-        if (project.buildOptions().dumpBuildTime()) {
-            start = System.currentTimeMillis();
-        }
-
-        report = project.buildOptions().testReport();
-        coverage = project.buildOptions().codeCoverage();
-
-
-        if (report) {
-            testReport = new TestReport();
-        }
-
         Path cachesRoot;
         Target target;
         Path testsCachePath;
@@ -157,10 +159,27 @@ public class RunNativeImageTestTask implements Task {
         } catch (IOException e) {
             throw createLauncherException("error while creating target directory: ", e);
         }
+    }
+    
+    public void execute(Package pkg, Target target, Path cachesRoot) throws IOException {
+        BuildOptions buildOptions = pkg.workspace().buildOptions(pkg.descriptor());
+        if (buildOptions.nativeImage() || buildOptions.cloud().equals("docker")) {
+            return;
+        }
+        long start = 0;
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+        }
+
+        report = buildOptions.testReport();
+        coverage = buildOptions.codeCoverage();
+
+        if (report) {
+            testReport = new TestReport();
+        }
 
         boolean hasTests = false;
-
-        PackageCompilation packageCompilation = project.currentPackage().getCompilation();
+        PackageCompilation packageCompilation = pkg.getCompilation();
         JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(packageCompilation, JvmTarget.JAVA_21);
         JarResolver jarResolver = jBallerinaBackend.jarResolver();
         TestProcessor testProcessor = new TestProcessor(jarResolver);
@@ -172,10 +191,9 @@ public class RunNativeImageTestTask implements Task {
         // Create seperate test suite map for each module.
         List<HashMap<String, TestSuite>> testSuiteMapEntries = new ArrayList<>();
         boolean isMockFunctionExist = false;
-        for (ModuleDescriptor moduleDescriptor :
-                project.currentPackage().moduleDependencyGraph().toTopologicallySortedList()) {
+        for (ModuleDescriptor moduleDescriptor : pkg.moduleDependencyGraph().toTopologicallySortedList()) {
             HashMap<String, TestSuite> testSuiteMap = new HashMap<>();
-            Module module = project.currentPackage().module(moduleDescriptor.name());
+            Module module = pkg.module(moduleDescriptor.name());
             ModuleName moduleName = module.moduleName();
 
             TestSuite suite = testProcessor.testSuite(module).orElse(null);
@@ -191,8 +209,8 @@ public class RunNativeImageTestTask implements Task {
             if (!isRerunTestExecution) {
                 TestUtils.clearFailedTestsJson(target.path());
             }
-            if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
-                suite.setSourceFileName(project.sourceRoot().getFileName().toString());
+            if (pkg.workspace().kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+                suite.setSourceFileName(pkg.workspace().sourceRoot(pkg.descriptor()).getFileName().toString());
             }
             suite.setReportRequired(report);
             if (!isMockFunctionExist) {
@@ -223,7 +241,7 @@ public class RunNativeImageTestTask implements Task {
         for (Map<String, TestSuite> testSuiteMap : testSuiteMapEntries) {
             try {
                 Path nativeConfigPath = target.getNativeConfigPath();
-                NativeUtils.createReflectConfig(nativeConfigPath, project.currentPackage(), testSuiteMap);
+                NativeUtils.createReflectConfig(nativeConfigPath, pkg, testSuiteMap);
             } catch (IOException e) {
                 throw createLauncherException("error while generating the necessary graalvm reflection config ", e);
             }
@@ -239,9 +257,7 @@ public class RunNativeImageTestTask implements Task {
                 }
             }
 
-
-
-            //Remove all mock function entries from test suites
+            // Remove all mock function entries from test suites
             for (Map.Entry<String, TestSuite> testSuiteEntry : testSuiteMap.entrySet()) {
                 TestSuite testSuite = testSuiteEntry.getValue();
                 if (!testSuite.getMockFunctionNamesMap().isEmpty()) {
@@ -250,16 +266,16 @@ public class RunNativeImageTestTask implements Task {
             }
 
             //Write the testsuite to the disk
-            TestUtils.writeToTestSuiteJson(testSuiteMap, testsCachePath);
+            TestUtils.writeToTestSuiteJson(testSuiteMap, target.getTestsCachePath());
 
             int testResult;
             try {
                 String warnings = GraalVMCompatibilityUtils.getAllWarnings(
-                        project.currentPackage(), jBallerinaBackend.targetPlatform().code(), true);
+                        pkg, jBallerinaBackend.targetPlatform().code(), true);
                 if (!warnings.isEmpty()) {
                     out.println(warnings);
                 }
-                testResult = runTestSuiteWithNativeImage(project.currentPackage(), target, testSuiteMap);
+                testResult = runTestSuiteWithNativeImage(pkg, target, testSuiteMap);
                 if (testResult != 0) {
                     accumulatedTestResult = testResult;
                 }
@@ -267,20 +283,19 @@ public class RunNativeImageTestTask implements Task {
                     for (Map.Entry<String, TestSuite> testSuiteEntry : testSuiteMap.entrySet()) {
                         String moduleName = testSuiteEntry.getKey();
                         ModuleStatus moduleStatus = TestUtils.loadModuleStatusFromFile(
-                                testsCachePath.resolve(moduleName).resolve(TesterinaConstants.STATUS_FILE));
+                                target.getTestsCachePath().resolve(moduleName).resolve(TesterinaConstants.STATUS_FILE));
                         if (moduleStatus == null) {
                             continue;
                         }
 
-                        if (!moduleName.equals(project.currentPackage().packageName().toString())) {
-                            moduleName = ModuleName.from(project.currentPackage().packageName(),
-                                    moduleName).toString();
+                        if (!moduleName.equals(pkg.packageName().toString())) {
+                            moduleName = ModuleName.from(pkg.packageName(), moduleName).toString();
                         }
                         testReport.addModuleStatus(moduleName, moduleStatus);
                     }
                 }
             } catch (IOException e) {
-                TestUtils.cleanTempCache(project, cachesRoot);
+                TestUtils.cleanTempCache(pkg, target.path());
                     throw createLauncherException("error occurred while running tests: ", e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -288,22 +303,22 @@ public class RunNativeImageTestTask implements Task {
         }
         if (report && hasTests) {
             try {
-                generateTesterinaReports(project, testReport, this.out, target);
+                generateTesterinaReports(pkg, testReport, this.out, target);
             } catch (IOException e) {
-                TestUtils.cleanTempCache(project, cachesRoot);
+                TestUtils.cleanTempCache(pkg, cachesRoot);
                 throw createLauncherException("error occurred while generating test report:", e);
             }
         }
 
         if (accumulatedTestResult != 0) {
-            TestUtils.cleanTempCache(project, cachesRoot);
+            TestUtils.cleanTempCache(pkg, cachesRoot);
             throw createLauncherException("there are test failures");
         }
 
 
         // Cleanup temp cache for SingleFileProject
-        TestUtils.cleanTempCache(project, cachesRoot);
-        if (project.buildOptions().dumpBuildTime()) {
+        TestUtils.cleanTempCache(pkg, cachesRoot);
+        if (buildOptions.dumpBuildTime()) {
             BuildTime.getInstance().testingExecutionDuration = System.currentTimeMillis() - start;
         }
     }

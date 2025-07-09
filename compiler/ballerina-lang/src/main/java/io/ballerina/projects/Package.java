@@ -52,19 +52,8 @@ public class Package {
 
     private Package(PackageContext packageContext, Project project) {
         this.packageContext = packageContext;
+        this.workspace = packageContext.workspace();
         this.project = project;
-        this.moduleMap = new ConcurrentHashMap<>();
-        this.populateModuleFunc = moduleId -> Module.from(
-                this.packageContext.moduleContext(moduleId), this);
-        this.resources = new ConcurrentHashMap<>();
-        this.testResources = new ConcurrentHashMap<>();
-        this.populateResourceFunc = documentId -> new Resource(
-                this.packageContext.resourceContext(documentId), this);
-    }
-
-    private Package(PackageContext packageContext, Workspace workspace) {
-        this.packageContext = packageContext;
-        this.workspace = workspace;
         this.moduleMap = new ConcurrentHashMap<>();
         this.populateModuleFunc = moduleId -> Module.from(
                 this.packageContext.moduleContext(moduleId), this);
@@ -83,18 +72,6 @@ public class Package {
         // package config has the tree information like modules.
         PackageContext packageContext = PackageContext.from(project, packageConfig, compilationOptions);
         return new Package(packageContext, project);
-    }
-
-    static Package from(Workspace workspace, ProjectEnvironment projectEnvironment,
-                        PackageConfig packageConfig, CompilationOptions compilationOptions) {
-        // TODO create package context here by giving the package config
-        // do the same for modules and documents
-        // il. package context creates modules contexts and modules context create document contexts
-
-        // contexts need to hold onto the configs. Should we decouple config from tree information as follows.
-        // package config has the tree information like modules.
-        PackageContext packageContext = PackageContext.from(workspace, projectEnvironment, packageConfig, compilationOptions);
-        return new Package(packageContext, workspace);
     }
 
     PackageContext packageContext() {
@@ -719,6 +696,7 @@ public class Package {
             DependencyGraph<ResolvedPackageDependency> newDepGraph = this.project.currentPackage().packageContext()
                     .getResolution(offlineCompOptions, true).dependencyGraph();
             cleanPackageCache(this.dependencyGraph, newDepGraph);
+            oldPackage.workspace.resetDependencyGraph();
             return this.project.currentPackage();
         }
 

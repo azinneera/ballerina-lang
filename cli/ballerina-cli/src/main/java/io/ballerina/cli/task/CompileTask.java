@@ -27,6 +27,7 @@ import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageDependency;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
@@ -148,44 +149,42 @@ public class CompileTask implements Task {
     @Override
     public void execute(Workspace workspace) {
         try {
-            DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-            List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+            DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+            List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
                     dependencyGraph.toTopologicallySortedList());
             if (this.projectPath != null) {
-                ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
-                                dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
-                                        .equals(this.projectPath))
+                PackageDescriptor packageDependency = topologicallySortedList.stream().filter(
+                                dependency -> workspace.sourceRoot(dependency).equals(this.projectPath))
                         .findFirst().orElseThrow();
                 topologicallySortedList.removeIf(pkg ->
                         !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
                                 && !pkg.equals(packageDependency));
             }
-            for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
-                PackageDescriptor packageDescriptor = packageDependency.packageInstance().descriptor();
+            for (PackageDescriptor descriptor : topologicallySortedList) {
                 // Print the source
-                printPackageInfo(workspace.kind(), workspace.getPackage(packageDescriptor));
+                printPackageInfo(workspace.kind(), workspace.getPackage(descriptor));
                 // Validate the source
-                validateProject(workspace.getPackage(packageDescriptor));
+                validateProject(workspace.getPackage(descriptor));
                 // Get the package resolution
-                PackageResolution packageResolution = getResolution(workspace.getPackage(packageDescriptor),
-                        workspace.buildOptions(packageDescriptor));
-                Set<String> packageImports = ProjectUtils.getPackageImports(workspace.getPackage(packageDescriptor));
+                PackageResolution packageResolution = getResolution(workspace.getPackage(descriptor),
+                        workspace.buildOptions(descriptor));
+                Set<String> packageImports = ProjectUtils.getPackageImports(workspace.getPackage(descriptor));
 
                 // Run code generator and modifier plugins
                 if (!packageResolution.diagnosticResult().hasErrors()) {
-                    runCodeGenerators(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor),
+                    runCodeGenerators(workspace.getPackage(descriptor), workspace.buildOptions(descriptor),
                             workspace.kind());
-                    runCodeModifiers(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor),
+                    runCodeModifiers(workspace.getPackage(descriptor), workspace.buildOptions(descriptor),
                             workspace.kind());
                 }
 
                 // Dump the package dependency graphs if required
-                dumpRawGraphsIfRequired(workspace.getPackage(packageDescriptor), packageResolution, packageImports);
+                dumpRawGraphsIfRequired(workspace.getPackage(descriptor), packageResolution, packageImports);
                 // Report resolution diagnostics
-                reportResolutionDiagnostics(workspace.getPackage(packageDescriptor));
+                reportResolutionDiagnostics(workspace.getPackage(descriptor));
 
                 // Compile the package
-                getCompilationAndSave(workspace.getPackage(packageDescriptor), workspace.buildOptions(packageDescriptor));
+                getCompilationAndSave(workspace.getPackage(descriptor), workspace.buildOptions(descriptor));
             }
         } catch (ProjectException e) {
             throw createLauncherException("compilation failed: " + e.getMessage());

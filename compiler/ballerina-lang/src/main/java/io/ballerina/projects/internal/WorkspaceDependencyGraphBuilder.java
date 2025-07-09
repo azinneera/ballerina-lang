@@ -21,6 +21,7 @@ import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.DependencyGraph.DependencyGraphBuilder;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageDependencyScope;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.ResolvedPackageDependency;
 
 import java.util.HashMap;
@@ -34,16 +35,16 @@ import java.util.Set;
  * @since 2.0.0
  */
 public class WorkspaceDependencyGraphBuilder {
-    private final Map<ResolvedPackageDependency, Set<ResolvedPackageDependency>> depGraph = new HashMap<>();
-    private final DependencyGraphBuilder<ResolvedPackageDependency> rawGraphBuilder;
+    private final Map<PackageDescriptor, Set<PackageDescriptor>> depGraph = new HashMap<>();
+    private final DependencyGraphBuilder<PackageDescriptor> rawGraphBuilder;
 
     public WorkspaceDependencyGraphBuilder() {
         this.rawGraphBuilder = DependencyGraphBuilder.getBuilder(null);
     }
 
-    public DependencyGraph<ResolvedPackageDependency> buildGraph() {
-        DependencyGraphBuilder<ResolvedPackageDependency> graphBuilder = DependencyGraphBuilder.getBuilder(null);
-        for (Map.Entry<ResolvedPackageDependency, Set<ResolvedPackageDependency>> entry : depGraph.entrySet()) {
+    public DependencyGraph<PackageDescriptor> buildGraph() {
+        DependencyGraphBuilder<PackageDescriptor> graphBuilder = DependencyGraphBuilder.getBuilder(null);
+        for (Map.Entry<PackageDescriptor, Set<PackageDescriptor>> entry : depGraph.entrySet()) {
             graphBuilder.addDependencies(entry.getKey(), entry.getValue());
         }
 
@@ -51,22 +52,20 @@ public class WorkspaceDependencyGraphBuilder {
     }
 
     public void addPackage(Package pkg) {
-        ResolvedPackageDependency key = new ResolvedPackageDependency(pkg, PackageDependencyScope.DEFAULT);
+        PackageDescriptor key = pkg.descriptor();
         if (!depGraph.containsKey(key)) {
             depGraph.put(key, new HashSet<>());
         }
     }
 
     public void addDependency(Package dependent, Package dependency) {
-        ResolvedPackageDependency dependentPkg = new ResolvedPackageDependency(
-                dependent, PackageDependencyScope.DEFAULT);
-        if (!depGraph.containsKey(dependentPkg)) {
+        PackageDescriptor dependentDesc = dependent.descriptor();
+        if (!depGraph.containsKey(dependentDesc)) {
             throw new IllegalStateException("Dependent package does not exist in the graph: " + dependent);
         }
-        ResolvedPackageDependency dependencyPkg = new ResolvedPackageDependency(
-                dependency, PackageDependencyScope.DEFAULT);
-        depGraph.get(dependentPkg).add(dependencyPkg);
+        PackageDescriptor dependencyDesc = dependency.descriptor();
+        depGraph.get(dependentDesc).add(dependencyDesc);
         // Add to raw graph for troubleshooting
-        rawGraphBuilder.addDependency(dependentPkg, dependencyPkg);
+        rawGraphBuilder.addDependency(dependentDesc, dependencyDesc);
     }
 }

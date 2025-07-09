@@ -23,6 +23,7 @@ import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
@@ -63,21 +64,19 @@ public class DumpBuildTimeTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
-        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
                 dependencyGraph.toTopologicallySortedList());
         if (this.projectPath != null) {
-            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
-                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
-                                    .equals(this.projectPath))
+            PackageDescriptor packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency).equals(this.projectPath))
                     .findFirst().orElseThrow();
             topologicallySortedList.removeIf(pkg ->
                     !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
                             && !pkg.equals(packageDependency));
         }
-        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
-            execute(workspace.getPackage(packageDependency.packageInstance().descriptor()),
-                    workspace.buildOptions(packageDependency.packageInstance().descriptor()));
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            execute(workspace.getPackage(descriptor), workspace.buildOptions(descriptor));
         }
     }
 

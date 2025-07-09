@@ -396,24 +396,23 @@ public final class CodeCoverageUtils {
      * @param packageSessionInfo List of SessionInfo
      * @throws IOException
      */
-    public static void createXMLReport(Project project,
+    public static void createXMLReport(Package pkg,
                                        List<ExecutionData> packageExecData,
                                        List<IClassCoverage> packageNativeClassCovList,
                                        List<IClassCoverage> packageBalClassCovList,
                                        List<ISourceFileCoverage> packageSourceCovList,
                                        List<SessionInfo> packageSessionInfo) throws IOException {
-        Target target = new Target(project.targetDir());
+        Target target = new Target(pkg.workspace().target(pkg.descriptor()));
         String title = target.getTestsCachePath().resolve(TesterinaConstants.COVERAGE_DIR).toFile().getName();
         XMLFormatter xmlFormatter = new XMLFormatter();
         File reportFile = new File(target.getReportPath().resolve(
-                project.currentPackage().packageName().value()).resolve(REPORT_XML_FILE).toString());
+                pkg.packageName().value()).resolve(REPORT_XML_FILE).toString());
         reportFile.getParentFile().mkdirs();
         try (FileOutputStream fileOutputStream = new FileOutputStream(reportFile)) {
             IReportVisitor visitor = xmlFormatter.createVisitor(fileOutputStream);
             visitor.visitInfo(packageSessionInfo, packageExecData);
-            visitor.visitBundle(getPartialCoverageModifiedBundle(title, project.currentPackage(),
-                    packageNativeClassCovList, packageBalClassCovList, packageSourceCovList),
-                    null);
+            visitor.visitBundle(getPartialCoverageModifiedBundle(title, pkg, packageNativeClassCovList,
+                            packageBalClassCovList, packageSourceCovList), null);
             visitor.visitEnd();
         }
     }

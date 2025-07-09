@@ -104,28 +104,25 @@ public class RunBuildToolsTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
-        DependencyGraph<ResolvedPackageDependency> dependencyGraph = workspace.dependencyGraph();
-        List<ResolvedPackageDependency> topologicallySortedList = new ArrayList<>(
-                dependencyGraph.toTopologicallySortedList());
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(dependencyGraph.toTopologicallySortedList());
         if (this.projectPath != null) {
-            ResolvedPackageDependency packageDependency = topologicallySortedList.stream().filter(
-                            dependency -> workspace.sourceRoot(dependency.packageInstance().descriptor())
-                                    .equals(this.projectPath))
+            PackageDescriptor packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency).equals(this.projectPath))
                     .findFirst().orElseThrow();
             topologicallySortedList.removeIf(pkg ->
                     !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
                             && !pkg.equals(packageDependency));
         }
-        for (ResolvedPackageDependency packageDependency : topologicallySortedList) {
-            workspace.setToolContextMap(packageDependency.packageId(), toolContextMap);
-            execute(packageDependency.packageInstance());
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            workspace.setToolContextMap(descriptor, toolContextMap);
+            execute(workspace.getPackage(descriptor));
 
-            PackageDescriptor packageDescriptor = packageDependency.packageInstance().descriptor();
             PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(
-                    workspace.sourceRoot(packageDescriptor),
-                    workspace.buildOptions(packageDescriptor).disableSyntaxTree());
+                    workspace.sourceRoot(descriptor),
+                    workspace.buildOptions(descriptor).disableSyntaxTree());
             if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
-                workspace.removePackage(packageDescriptor);
+                workspace.removePackage(descriptor);
                 workspace.addPackage(packageConfig);
             }
         }
