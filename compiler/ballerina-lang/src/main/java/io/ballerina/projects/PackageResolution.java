@@ -575,7 +575,8 @@ public class PackageResolution {
 
     private ResolutionOptions getResolutionOptions(PackageContext rootPackageContext,
                                                    CompilationOptions compilationOptions) {
-        boolean sticky = ProjectUtils.getSticky(rootPackageContext.project());
+        boolean sticky = ProjectUtils.getSticky(rootPackageContext.workspace()
+                .getPackage(rootPackageContext.descriptor()));
         this.autoUpdate = !sticky;
         PackageLockingMode packageLockingMode;
         SemanticVersion prevDistributionVersion = rootPackageContext.dependencyManifest().distributionVersion();

@@ -11,11 +11,12 @@ import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
-import io.ballerina.projects.Project;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.ProjectException;
-import io.ballerina.projects.directory.BuildProject;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.ProjectDiagnosticErrorCode;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.toml.semantic.TomlType;
 import io.ballerina.toml.semantic.ast.TomlTableNode;
@@ -31,7 +32,6 @@ import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.PACK_COMMAND;
 import static io.ballerina.projects.internal.ManifestBuilder.getStringValueFromTomlTableNode;
-import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
 import static io.ballerina.runtime.api.constants.RuntimeConstants.SYSTEM_PROP_BAL_DEBUG;
 
 /**
@@ -157,45 +157,91 @@ public class PackCommand implements BLauncherCmd {
             return;
         }
 
-        Project project;
-
-        BuildOptions buildOptions = constructBuildOptions();
-
         // Throw an error if its a single file
         if (FileUtils.hasExtension(this.projectPath)) {
             CommandUtil.printError(this.errStream, "bal pack can only be used with a Ballerina package.", null, false);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
-
-        try {
-            if (buildOptions.dumpBuildTime()) {
-                start = System.currentTimeMillis();
-                BuildTime.getInstance().timestamp = start;
-            }
-            project = BuildProject.load(this.projectPath, buildOptions);
-            if (buildOptions.dumpBuildTime()) {
-                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-            }
-        } catch (ProjectException e) {
-            CommandUtil.printError(this.errStream, e.getMessage(), null, false);
+        // load project
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is a workspace, please specify a package path instead.",
+                    null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is not a valid Ballerina package: "
+                            + this.projectPath.toAbsolutePath(), null, true);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
 
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions(workspaceRoot.isPresent());
+        if (buildOptions.dumpBuildTime()) {
+            start = System.currentTimeMillis();
+            BuildTime.getInstance().timestamp = start;
+        }
+
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+
+            if (buildOptions.dumpBuildTime()) {
+                BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
+            }
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        Path absProjectPath = this.projectPath.toAbsolutePath().normalize();
+
         // Check `[package]` section is available when compile
-        if (project.currentPackage().ballerinaToml().get().tomlDocument().toml().getTable("package")
+        Optional<Package> pkg = workspace.packages().stream().filter(aPackage ->
+                        workspace.sourceRoot(aPackage.descriptor()).equals(absProjectPath))
+                .findFirst();
+        if (pkg.isEmpty()) {
+            CommandUtil.printError(this.errStream,
+                    "Ballerina package not found: " + absProjectPath, null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        validateMetaInfo(pkg.get());
+        // Sets the debug port as a system property, which will be used when setting up debug args before running tests.
+        if (this.debugPort != null) {
+            System.setProperty(SYSTEM_PROP_BAL_DEBUG, this.debugPort);
+        }
+        // Validate Settings.toml file
+        RepoUtils.readSettings();
+
+        Optional<Diagnostic> deprecatedDocWarning = ProjectUtils.getProjectLoadingDiagnostic().stream().filter(
+                diagnostic -> diagnostic.diagnosticInfo().code().equals(
+                        ProjectDiagnosticErrorCode.DEPRECATED_DOC_FILE.diagnosticId())).findAny();
+        deprecatedDocWarning.ifPresent(this.errStream::println);
+
+        packProject(workspace, pkg.get(), absProjectPath);
+        if (this.exitWhenFinish) {
+            Runtime.getRuntime().exit(0);
+        }
+    }
+
+    private void validateMetaInfo(Package pkg) {
+        if (pkg.ballerinaToml().get().tomlDocument().toml().getTable("package")
                 .isEmpty()) {
             CommandUtil.printError(this.errStream,
                     "'package' information not found in " + ProjectConstants.BALLERINA_TOML,
                     null,
                     false);
             CommandUtil.exitError(this.exitWhenFinish);
-            return;
         } else {
             // if not empty, validate the `[package]` section
-
-            TomlTableNode pkgNode = (TomlTableNode) project.currentPackage().ballerinaToml().get().tomlDocument().toml()
+            TomlTableNode pkgNode = (TomlTableNode) pkg.ballerinaToml().get().tomlDocument().toml()
                     .rootNode().entries().get("package");
             if (pkgNode == null || pkgNode.kind() == TomlType.NONE) {
                 CommandUtil.printError(this.errStream,
@@ -240,45 +286,24 @@ public class PackCommand implements BLauncherCmd {
                         null,
                         false);
                 CommandUtil.exitError(this.exitWhenFinish);
-                return;
             }
 
         }
-
-        // Sets the debug port as a system property, which will be used when setting up debug args before running tests.
-        if (!project.buildOptions().skipTests() && this.debugPort != null) {
-            System.setProperty(SYSTEM_PROP_BAL_DEBUG, this.debugPort);
-        }
-
-        // Validate Settings.toml file
-        RepoUtils.readSettings();
-
-        // Check package files are modified after last build
-        boolean isPackageModified = isProjectUpdated(project);
-
-        Optional<Diagnostic> deprecatedDocWarning = ProjectUtils.getProjectLoadingDiagnostic().stream().filter(
-                diagnostic -> diagnostic.diagnosticInfo().code().equals(
-                        ProjectDiagnosticErrorCode.DEPRECATED_DOC_FILE.diagnosticId())).findAny();
-
-        deprecatedDocWarning.ifPresent(this.errStream::println);
-
-        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
-                .addTask(new ResolveMavenDependenciesTask(outStream))
-                .addTask(new CompileTask(outStream, errStream, true, false,
-                        isPackageModified, buildOptions.enableCache()))
-                .addTask(new CreateBalaTask(outStream))
-                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
-                .build();
-
-        taskExecutor.executeTasks(project);
-        if (this.exitWhenFinish) {
-            Runtime.getRuntime().exit(0);
-        }
     }
 
-    private BuildOptions constructBuildOptions() {
+    private void packProject(Workspace workspace, Package pkg, Path projectPath) {
+        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
+                .addTask(new CleanTargetDirTask(true, false))
+                .addTask(new RunBuildToolsTask(outStream, projectPath))
+                .addTask(new ResolveMavenDependenciesTask(outStream, projectPath))
+                .addTask(new CompileTask(outStream, errStream, true, false, projectPath))
+                .addTask(new CreateBalaTask(outStream, pkg, projectPath))
+                .addTask(new DumpBuildTimeTask(outStream, projectPath))
+                .build();
+        taskExecutor.executeTasks(workspace);
+    }
+
+    private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
         buildOptionsBuilder
                 .setExperimental(experimentalFlag)
@@ -296,7 +321,7 @@ public class PackCommand implements BLauncherCmd {
                 .setOptimizeDependencyCompilation(optimizeDependencyCompilation)
                 .setLockingMode(lockingMode);
 
-        if (targetDir != null) {
+        if (targetDir != null && !workspaceBuild) {
             buildOptionsBuilder.targetDir(targetDir.toString());
         }
 

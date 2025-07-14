@@ -26,7 +26,6 @@ import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 
 import java.io.File;
@@ -80,11 +79,6 @@ public class DumpBuildTimeTask implements Task {
         }
     }
 
-    @Override
-    public void execute(Project project) {
-        execute(project.currentPackage(), project.buildOptions());
-    }
-
     private void execute(Package pkg, BuildOptions buildOptions) {
         if (!buildOptions.dumpBuildTime()) {
             return;
@@ -118,7 +112,7 @@ public class DumpBuildTimeTask implements Task {
         if (pkg.workspace().kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
             return currentDir.resolve(BUILD_TIME_JSON).toAbsolutePath();
         }
-        return pkg.workspace().target(pkg.descriptor()).resolve(BUILD_TIME_JSON).toAbsolutePath();
+        return pkg.workspace().targetDir(pkg.descriptor()).resolve(BUILD_TIME_JSON).toAbsolutePath();
     }
 
     private void printBuildTime(BuildTime buildTime) {

@@ -28,11 +28,8 @@ import io.ballerina.projects.Diagnostics;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageConfig;
 import io.ballerina.projects.PackageDescriptor;
-import io.ballerina.projects.PackageId;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.buildtools.CodeGeneratorTool;
 import io.ballerina.projects.buildtools.ToolContext;
 import io.ballerina.projects.Workspace;
@@ -80,7 +77,6 @@ public class RunBuildToolsTask implements Task {
     private final PrintStream outStream;
     private final Path projectPath;
     private final boolean exitWhenFinish;
-    private final Map<Tool.Field, ToolContext> toolContextMap = new HashMap<>();
 
     public RunBuildToolsTask(PrintStream out) {
         this.outStream = out;
@@ -92,14 +88,6 @@ public class RunBuildToolsTask implements Task {
         this.outStream = outStream;
         this.exitWhenFinish = true;
         this.projectPath = projectPath;
-    }
-
-    @Override
-    public void execute(Project project) {
-        project.setToolContextMap(toolContextMap);
-        execute(project.currentPackage());
-        // Reload the project to load the generated code
-        reloadProject(project);
     }
 
     @Override
@@ -115,12 +103,21 @@ public class RunBuildToolsTask implements Task {
                             && !pkg.equals(packageDependency));
         }
         for (PackageDescriptor descriptor : topologicallySortedList) {
-            workspace.setToolContextMap(descriptor, toolContextMap);
-            execute(workspace.getPackage(descriptor));
+            Map<Tool.Field, ToolContext> toolContextMap = new HashMap<>();
+            List<Tool> toolEntries = workspace.getPackage(descriptor).manifest().tools();
+            if (toolEntries.isEmpty()) {
+                continue;
+            }
+            // Populate the tool context map
+            for (Tool toolEntry : toolEntries) {
+                // Populate tool context
+                ToolContext toolContext = ToolContext.from(toolEntry, workspace.getPackage(descriptor), outStream);
+                toolContextMap.put(toolEntry.id(), toolContext);
+            }
+            execute(workspace.getPackage(descriptor), toolEntries, toolContextMap);
 
             PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(
-                    workspace.sourceRoot(descriptor),
-                    workspace.buildOptions(descriptor).disableSyntaxTree());
+                    workspace.sourceRoot(descriptor), workspace.buildOptions(descriptor).disableSyntaxTree());
             if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
                 workspace.removePackage(descriptor);
                 workspace.addPackage(packageConfig);
@@ -128,7 +125,9 @@ public class RunBuildToolsTask implements Task {
         }
     }
 
-    private void execute (Package pkg) {
+    private void execute(Package pkg, List<Tool> toolEntries, Map<Tool.Field, ToolContext> toolContextMap) {
+        this.outStream.println("\nExecuting Build Tools");
+
         // Print all build tool manifest diagnostics
         Collection<Diagnostic> toolManifestDiagnostics = pkg.manifest().diagnostics()
                 .diagnostics().stream().filter(diagnostic -> diagnostic.diagnosticInfo().code()
@@ -136,19 +135,6 @@ public class RunBuildToolsTask implements Task {
         toolManifestDiagnostics.forEach(outStream::println);
         List<Diagnostic> toolDiagnostics = new ArrayList<>(toolManifestDiagnostics);
 
-        // Read the build tool entries specified the Ballerina.toml
-        List<Tool> toolEntries = pkg.manifest().tools();
-        if (toolEntries.isEmpty()) {
-            return;
-        }
-        this.outStream.println("\nExecuting Build Tools");
-
-        // Populate the tool context map
-        for (Tool toolEntry : toolEntries) {
-            // Populate tool context
-            ToolContext toolContext = ToolContext.from(toolEntry, pkg, outStream);
-            toolContextMap.put(toolEntry.id(), toolContext);
-        }
         BuildToolResolution buildToolResolution;
         try {
             buildToolResolution = pkg.getBuildToolResolution();
@@ -303,12 +289,6 @@ public class RunBuildToolsTask implements Task {
     private void printToolSkipWarning(Tool toolEntry) {
         outStream.printf("WARNING: Execution of '%s:%s' is skipped due to errors%n", toolEntry
                 .type().value(), toolEntry.id() != null ? toolEntry.id().value() : "");
-    }
-
-    private void reloadProject(Project project) {
-        PackageConfig packageConfig = PackageConfigCreator.createBuildProjectConfig(project.sourceRoot(),
-                project.buildOptions().disableSyntaxTree());
-        project.addPackage(packageConfig);
     }
 
     private static List<File> getToolCommandJarAndDependencyJars(BuildTool buildTool) {

@@ -27,16 +27,13 @@ import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
-import io.ballerina.projects.PackageDependency;
 import io.ballerina.projects.PackageDescriptor;
-import io.ballerina.projects.PackageId;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageResolution;
 import io.ballerina.projects.PlatformLibraryScope;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.directory.SingleFileProject;
@@ -80,8 +77,8 @@ public class CompileTask implements Task {
     private long start = 0;
     List<Diagnostic> diagnostics = new ArrayList<>();
 
-    public CompileTask(PrintStream out, PrintStream err) {
-        this(out, err, false, false, true, false);
+    public CompileTask(PrintStream out, PrintStream err, Path projectPath) {
+        this(out, err, false, false,  projectPath);
     }
 
     public CompileTask(PrintStream out,
@@ -109,41 +106,6 @@ public class CompileTask implements Task {
         this.isPackageModified = true;
         this.cachesEnabled = false;
 
-    }
-
-    @Override
-    public void execute(Project project) {
-        try {
-            // Print the source
-            if (project instanceof SingleFileProject) {
-                printPackageInfo(ProjectKind.SINGLE_FILE_PROJECT, project.currentPackage());
-            } else {
-                printPackageInfo(ProjectKind.BUILD_PROJECT, project.currentPackage());
-            }
-
-            // Validate the source
-            validateProject(project.currentPackage());
-            // Get the package resolution
-            PackageResolution packageResolution = getResolution(project.currentPackage(), project.buildOptions());
-            Set<String> packageImports = ProjectUtils.getPackageImports(project.currentPackage());
-
-            // Run code generator and modifier plugins
-            if (!packageResolution.diagnosticResult().hasErrors()) {
-                runCodeGenerators(project.currentPackage(), project.buildOptions(),
-                        project.currentPackage().workspace().kind());
-                runCodeModifiers(project.currentPackage(), project.buildOptions(),
-                        project.currentPackage().workspace().kind());
-            }
-
-            // Dump the package dependency graphs if required
-            dumpRawGraphsIfRequired(project.currentPackage(), packageResolution, packageImports);
-            // Report resolution diagnostics
-            reportResolutionDiagnostics(project.currentPackage());
-            // Compile the package
-            getCompilationAndSave(project.currentPackage(), project.buildOptions());
-        } catch (ProjectException e) {
-            throw createLauncherException("compilation failed: " + e.getMessage());
-        }
     }
 
     @Override

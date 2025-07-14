@@ -292,8 +292,10 @@ public class RemotePackageRepository implements PackageRepository {
         if (!updatedRequests.isEmpty()) {
             try {
                 PackageResolutionRequest packageResolutionRequest = toPackageResolutionRequest(updatedRequests);
-                Collection<PackageMetadataResponse> remotePackages =
-                        fromPackageResolutionResponse(updatedRequests, packageResolutionRequest);
+                Collection<PackageMetadataResponse> remotePackages = new ArrayList<>();
+                if (!options.offline()) {
+                    remotePackages = fromPackageResolutionResponse(updatedRequests, packageResolutionRequest);
+                }
                 // Merge central requests and local requests
                 // Here we will pick the latest package from remote or local
                 return mergeResolution(remotePackages, cachedPackages, deprecatedPackages);

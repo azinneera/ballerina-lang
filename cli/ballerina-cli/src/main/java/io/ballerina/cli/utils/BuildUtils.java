@@ -17,7 +17,6 @@
 package io.ballerina.cli.utils;
 
 import io.ballerina.projects.Package;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.internal.model.Target;
 import org.ballerinalang.compiler.plugins.CompilerPlugin;
 
@@ -32,13 +31,6 @@ import java.util.ServiceLoader;
 public final class BuildUtils {
 
     private BuildUtils() {
-    }
-
-    public static void notifyPlugins(Project project, Target target) {
-        ServiceLoader<CompilerPlugin> processorServiceLoader = ServiceLoader.load(CompilerPlugin.class);
-        for (CompilerPlugin plugin : processorServiceLoader) {
-            plugin.codeGenerated(project, target);
-        }
     }
 
     public static void notifyPlugins(Package pkg, Target target) {

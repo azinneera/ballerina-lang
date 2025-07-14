@@ -19,15 +19,19 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.projects.DiagnosticResult;
+import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageResolution;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.tools.diagnostics.Diagnostic;
 import org.ballerinalang.central.client.CentralClientConstants;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,15 +45,27 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 public class CreateDependencyGraphTask implements Task {
     private final transient PrintStream out;
     private final transient PrintStream err;
+    private final Path projectPath;
 
-    public CreateDependencyGraphTask(PrintStream err, PrintStream out) {
+    public CreateDependencyGraphTask(PrintStream err, PrintStream out, Path projectPath) {
         this.out = out;
         this.err = err;
+        this.projectPath = projectPath;
     }
 
     @Override
-    public void execute(Project project) {
-        if (ProjectUtils.isPackageEmpty(project.currentPackage())) {
+    public void execute(Workspace workspace) {
+        this.out.println();
+        this.out.println("Resolving dependencies");
+        Package pkg = workspace.packages().stream().filter(aPackage ->
+                        workspace.sourceRoot(aPackage.descriptor()).equals(this.projectPath))
+                .findFirst()
+                .orElseThrow();
+        execute(pkg.descriptor(), workspace);
+    }
+
+    private void execute(PackageDescriptor descriptor, Workspace workspace) {
+        if (ProjectUtils.isPackageEmpty(workspace.getPackage(descriptor))) {
             throw createLauncherException("package is empty. Please add at least one .bal file.");
         }
         System.setProperty(CentralClientConstants.ENABLE_OUTPUT_STREAM, "true");
@@ -57,18 +73,20 @@ public class CreateDependencyGraphTask implements Task {
         try {
             List<Diagnostic> diagnostics = new ArrayList<>();
 
-            PackageResolution packageResolution = project.currentPackage().getResolution();
+            PackageResolution packageResolution = workspace.getPackage(descriptor).getResolution();
 
-            if (project.currentPackage().compilationOptions().dumpRawGraphs()) {
+            if (workspace.getPackage(descriptor).compilationOptions().dumpRawGraphs()) {
+                this.out.println();
+                this.out.println("Generating dependency graph");
                 packageResolution.dumpGraphs(out);
             }
 
             // run built-in code generator compiler plugins
             // Errors in package resolution denotes version incompatibility errors.
             // We run code generators/modifiers only if package resolution does not have errors.
-            if (!isResolutionErroneous(project)) {
-                if (isProjectKindSuitableForCodeGenAndModify(project)) {
-                    DiagnosticResult codeGenAndModifyDiagnosticResult = project.currentPackage()
+            if (!isResolutionErroneous(workspace.getPackage(descriptor))) {
+                if (isProjectKindSuitableForCodeGenAndModify(workspace.kind())) {
+                    DiagnosticResult codeGenAndModifyDiagnosticResult = workspace.getPackage(descriptor)
                             .runCodeGenAndModifyPlugins();
                     if (codeGenAndModifyDiagnosticResult != null) {
                         diagnostics.addAll(codeGenAndModifyDiagnosticResult.diagnostics());
@@ -78,18 +96,18 @@ public class CreateDependencyGraphTask implements Task {
 
             // We dump the raw graphs twice only if code generator/modifier plugins are engaged
             // since the package has changed now
-            if (packageResolution != project.currentPackage().getResolution()) {
-                packageResolution = project.currentPackage().getResolution();
-                if (project.currentPackage().compilationOptions().dumpRawGraphs()) {
+            if (packageResolution != workspace.getPackage(descriptor).getResolution()) {
+                packageResolution = workspace.getPackage(descriptor).getResolution();
+                if (workspace.getPackage(descriptor).compilationOptions().dumpRawGraphs()) {
                     packageResolution.dumpGraphs(out);
                 }
             }
-            if (project.currentPackage().compilationOptions().dumpGraph()) {
+            if (workspace.getPackage(descriptor).compilationOptions().dumpGraph()) {
                 packageResolution.dumpGraphs(out);
             }
 
-            if (isResolutionErroneous(project)) {
-                diagnostics.addAll(project.currentPackage().getResolution().diagnosticResult().diagnostics());
+            if (isResolutionErroneous(workspace.getPackage(descriptor))) {
+                diagnostics.addAll(workspace.getPackage(descriptor).getResolution().diagnosticResult().diagnostics());
                 diagnostics.forEach(d -> err.println(d.toString()));
                 throw createLauncherException("package resolution contains errors");
             }
@@ -98,13 +116,13 @@ public class CreateDependencyGraphTask implements Task {
         }
     }
 
-    private boolean isProjectKindSuitableForCodeGenAndModify(Project project) {
+    private boolean isProjectKindSuitableForCodeGenAndModify(ProjectKind projectKind) {
         // BalaProject is a read-only project.
         // Hence, we run the code generators/modifiers only for BuildProject and SingleFileProject
-        return !project.kind().equals(ProjectKind.BALA_PROJECT);
+        return !projectKind.equals(ProjectKind.BALA_PROJECT);
     }
 
-    private boolean isResolutionErroneous(Project project) {
-        return project.currentPackage().getResolution().diagnosticResult().hasErrors();
+    private boolean isResolutionErroneous(Package pkg) {
+        return pkg.getResolution().diagnosticResult().hasErrors();
     }
 }

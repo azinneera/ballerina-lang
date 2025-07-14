@@ -32,12 +32,9 @@ import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.DependencyGraph;
-import io.ballerina.projects.Module;
 import io.ballerina.projects.PackageDescriptor;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
@@ -49,14 +46,11 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.TEST_COMMAND;
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
-import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
 import static io.ballerina.runtime.api.constants.RuntimeConstants.SYSTEM_PROP_BAL_DEBUG;
 import static org.ballerinalang.test.runtime.util.TesterinaConstants.JACOCO_XML_FORMAT;
 
@@ -312,64 +306,6 @@ public class TestCommand implements BLauncherCmd {
             return;
         }
 
-
-
-
-
-
-
-
-
-
-
-        // load project
-        Project project;
-
-        // Skip code coverage for single bal files if option is set
-//        if (FileUtils.hasExtension(this.projectPath)) {
-//            if (coverage != null && coverage) {
-//                this.outStream.println("Code coverage is not yet supported with single bal files. Ignoring the flag " +
-//                        "and continuing the test run...");
-//            }
-//            coverage = false;
-//            testReport = false;
-//        }
-//        BuildOptions buildOptions = constructBuildOptions(&& !workspaceBuild);
-
-//        boolean isSingleFile = false;
-//        if (FileUtils.hasExtension(this.projectPath)) {
-//            try {
-//                if (buildOptions.dumpBuildTime()) {
-//                    start = System.currentTimeMillis();
-//                    BuildTime.getInstance().timestamp = start;
-//                }
-//                project = SingleFileProject.load(this.projectPath, buildOptions);
-//                if (buildOptions.dumpBuildTime()) {
-//                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-//                }
-//            } catch (ProjectException e) {
-//                CommandUtil.printError(this.errStream, e.getMessage(), testCmd, false);
-//                CommandUtil.exitError(this.exitWhenFinish);
-//                return;
-//            }
-//            isSingleFile = true;
-//        } else {
-//            try {
-//                if (buildOptions.dumpBuildTime()) {
-//                    start = System.currentTimeMillis();
-//                    BuildTime.getInstance().timestamp = start;
-//                }
-//                project = BuildProject.load(this.projectPath, buildOptions);
-//                if (buildOptions.dumpBuildTime()) {
-//                    BuildTime.getInstance().projectLoadDuration = System.currentTimeMillis() - start;
-//                }
-//            } catch (ProjectException e) {
-//                CommandUtil.printError(this.errStream, e.getMessage(), testCmd, false);
-//                CommandUtil.exitError(this.exitWhenFinish);
-//                return;
-//            }
-//        }
-
         // Sets the debug port as a system property, which will be used when setting up debug args before running tests.
         if (this.debugPort != null) {
             System.setProperty(SYSTEM_PROP_BAL_DEBUG, this.debugPort);
@@ -412,107 +348,6 @@ public class TestCommand implements BLauncherCmd {
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
-
-
-
-
-
-
-//        if (workspace.buildOptions().codeCoverage()) {
-//            if (coverageFormat != null) {
-//                if (!coverageFormat.equals(JACOCO_XML_FORMAT)) {
-//                    String errMsg = "unsupported coverage report format '" + coverageFormat + "' found. Only '" +
-//                            JACOCO_XML_FORMAT + "' format is supported.";
-//                    CommandUtil.printError(this.errStream, errMsg, null, false);
-//                    CommandUtil.exitError(this.exitWhenFinish);
-//                    return;
-//                }
-//            }
-//            if (excludes != null && excludes.isEmpty()) {
-//                this.outStream.println("warning: ignoring --excludes flag since given exclusion list is empty");
-//            }
-//        } else {
-//            // Skip --includes flag if it is set without code coverage
-//            if (includes != null) {
-//                this.outStream.println("warning: ignoring --includes flag since code coverage is not enabled");
-//            }
-//            // Skip --coverage-format flag if it is set without code coverage
-//            if (coverageFormat != null) {
-//                this.outStream.println("warning: ignoring --coverage-format flag since code coverage is not " +
-//                        "enabled");
-//            }
-//            if (excludes != null) {
-//                this.outStream.println("warning: ignoring --excludes flag since code coverage is not enabled");
-//            }
-//        }
-//
-//        if (project.buildOptions().nativeImage() && project.buildOptions().codeCoverage()) {
-//            this.outStream.println("WARNING: Code coverage generation is not supported with Ballerina native test");
-//        }
-//
-//        if (!project.buildOptions().nativeImage() && !project.buildOptions().graalVMBuildOptions().isEmpty()) {
-//            this.outStream.println("WARNING: Additional GraalVM build options are ignored since graalvm " +
-//                    "flag is not set");
-//        }
-//
-//        if (!project.buildOptions().cloud().isEmpty() && project.buildOptions().codeCoverage()) {
-//            this.outStream.println("WARNING: Code coverage generation is not supported with Ballerina cloud test");
-//        }
-//
-//        if (!project.buildOptions().cloud().isEmpty() && this.rerunTests) {
-//            this.outStream.println("WARNING: Rerun failed tests is not supported with Ballerina cloud test");
-//        }
-//
-//        if (!project.buildOptions().cloud().isEmpty() && project.buildOptions().testReport()) {
-//            this.outStream.println("WARNING: Test report generation is not supported with Ballerina cloud test");
-//        }
-
-//        boolean isTestingDelegated = project.buildOptions().cloud().equals("docker");
-
-//        // Run pre-build tasks to have the project reloaded.
-//        // In code coverage generation, the module map is duplicated.
-//        // Therefore, the project needs to be reloaded beforehand to provide the latest project instance
-//        // which has the newly generated code for code coverage calculation.
-//        // Hence, below tasks are executed before extracting the module map from the project.
-//        TaskExecutor preBuildTaskExecutor = new TaskExecutor.TaskBuilder()
-//                .addTask(new CleanTargetCacheDirTask(), isSingleFile) // clean the target cache dir(projects only)
-//                .addTask(new CleanTargetBinTestsDirTask(), (isSingleFile || !isTestingDelegated))
-//                .addTask(new RunBuildToolsTask(outStream), isSingleFile) // run build tools
-//                .build();
-//        preBuildTaskExecutor.executeTasks(project);
-
-//        Iterable<Module> originalModules = project.currentPackage().modules();
-//        Map<String, Module> moduleMap = new HashMap<>();
-//
-//        for (Module originalModule : originalModules) {
-//            moduleMap.put(originalModule.moduleName().toString(), originalModule);
-//        }
-
-//        // Check package files are modified after last build
-//        boolean isPackageModified = isProjectUpdated(project);
-//
-//        TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-//                .addTask(new ResolveMavenDependenciesTask(outStream)) // resolve maven dependencies in Ballerina.toml
-//                // compile the modules
-//                .addTask(new CompileTask(outStream, errStream, false, false,
-//                        isPackageModified, buildOptions.enableCache()))
-////                .addTask(new CopyResourcesTask(), listGroups) // merged with CreateJarTask
-//                .addTask(new CreateTestExecutableTask(outStream, groupList, disableGroupList, testList, listGroups,
-//                                cliArgs, isParallelExecution), !isTestingDelegated)
-//                .addTask(new RunTestsTask(outStream, errStream, rerunTests, groupList, disableGroupList,
-//                                testList, includes, coverageFormat, moduleMap, listGroups, excludes, cliArgs,
-//                                isParallelExecution),
-//                        (project.buildOptions().nativeImage() || isTestingDelegated))
-//                .addTask(new RunNativeImageTestTask(outStream, rerunTests, groupList, disableGroupList,
-//                                testList, includes, coverageFormat, moduleMap, listGroups, isParallelExecution),
-//                        (!project.buildOptions().nativeImage() || isTestingDelegated))
-//                .addTask(new DumpBuildTimeTask(outStream), !project.buildOptions().dumpBuildTime())
-//                .build();
-//
-//        taskExecutor.executeTasks(project);
-        if (this.exitWhenFinish) {
-            Runtime.getRuntime().exit(0);
-        }
     }
 
     private void testSpecificProjectInWorkspace(Workspace workspace, Path absProjectPath, String[] args) {
@@ -536,9 +371,9 @@ public class TestCommand implements BLauncherCmd {
         // which has the newly generated code for code coverage calculation.
         // Hence, below tasks are executed before extracting the module map from the project.
         TaskExecutor preBuildTaskExecutor = new TaskExecutor.TaskBuilder()
-                .addTask(new CleanTargetCacheDirTask()) // clean the target cache dir(projects only)
-                .addTask(new CleanTargetBinTestsDirTask())
-                .addTask(new RunBuildToolsTask(outStream)) // run build tools
+                .addTask(new CleanTargetCacheDirTask(absProjectPath)) // clean the target cache dir(projects only)
+                .addTask(new CleanTargetBinTestsDirTask(absProjectPath))
+                .addTask(new RunBuildToolsTask(outStream, absProjectPath)) // run build tools
                 .build();
         preBuildTaskExecutor.executeTasks(workspace);
 

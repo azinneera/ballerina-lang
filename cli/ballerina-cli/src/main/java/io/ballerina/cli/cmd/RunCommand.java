@@ -35,12 +35,11 @@ import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.Workspace;
-import io.ballerina.projects.directory.BuildProject;
-import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectPaths;
 import io.ballerina.projects.util.ProjectUtils;
+import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -55,7 +54,6 @@ import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.RUN_COMMAND;
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
-import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
 import static io.ballerina.runtime.api.constants.RuntimeConstants.SYSTEM_PROP_BAL_DEBUG;
 
 /**
@@ -237,27 +235,11 @@ public class RunCommand implements BLauncherCmd {
             return;
         }
 
-
         // load project
-        boolean isSingleFileBuild = false;
-        if (FileUtils.hasExtension(this.projectPath)) {
-            try {
-                isSingleFileBuild = true;
-            } catch (ProjectException e) {
-                CommandUtil.printError(this.errStream, e.getMessage(), null, false);
-                CommandUtil.exitError(this.exitWhenFinish);
-                return;
-            }
-        } else if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
             CommandUtil.printError(this.errStream,
                     "the specified path is a workspace, please specify a package or a source file to run",
                     null, true);
-            CommandUtil.exitError(this.exitWhenFinish);
-            return;
-        } else if (!ProjectPaths.isPackageRoot(this.projectPath) && !ProjectPaths.isWorkspaceRoot(this.projectPath)) {
-            CommandUtil.printError(this.errStream,
-                    "the specified path is not a valid Ballerina package or workspace: "
-                            + this.projectPath.toAbsolutePath(), null, true);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
@@ -283,15 +265,6 @@ public class RunCommand implements BLauncherCmd {
             return;
         }
 
-        if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
-            if (targetDir != null) {
-                CommandUtil.printError(this.errStream,
-                        "'--target-dir' is not supported for workspaces", null, true);
-                CommandUtil.exitError(this.exitWhenFinish);
-                return;
-            }
-        }
-
         Target target = null;
         try {
             if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
@@ -303,6 +276,8 @@ public class RunCommand implements BLauncherCmd {
         } catch (ProjectException e) {
             throw createLauncherException("unable to create the executable:" + e.getMessage());
         }
+
+        RepoUtils.readSettings();
 
         runProject(workspace, this.projectPath.toAbsolutePath().normalize(), args, target);
         if (this.exitWhenFinish) {

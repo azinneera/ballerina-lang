@@ -230,7 +230,10 @@ public class PackageCompilation {
         if (rootPackageContext.project().kind().equals(ProjectKind.BUILD_PROJECT)) {
             ServiceLoader<CompilerPlugin> processorServiceLoader = ServiceLoader.load(CompilerPlugin.class);
             for (CompilerPlugin plugin : processorServiceLoader) {
-                List<Diagnostic> pluginDiagnostics = plugin.codeAnalyze(rootPackageContext.project());
+                List<Diagnostic> pluginDiagnostics = plugin.codeAnalyze(
+                        rootPackageContext.project()); // TODO: check if this internal to the compiler
+                pluginDiagnostics.addAll(plugin.codeAnalyze(rootPackageContext.workspace().getPackage(
+                        rootPackageContext.descriptor())));
                 diagnostics.addAll(pluginDiagnostics);
                 this.pluginDiagnostics.addAll(pluginDiagnostics);
             }

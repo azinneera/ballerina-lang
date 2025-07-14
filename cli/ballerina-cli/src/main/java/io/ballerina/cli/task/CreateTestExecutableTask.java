@@ -35,7 +35,6 @@ import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.TestEmitArgs;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
@@ -84,7 +83,7 @@ public class CreateTestExecutableTask implements Task {
     private final boolean listGroups;
     private final List<String> cliArgs;
     private final boolean isParallelExecution;
-    private Path projectPath;
+    private final Path projectPath;
 
     public CreateTestExecutableTask(PrintStream out, String groupList, String disableGroupList, String singleExecTests,
                                     boolean listGroups, String[] cliArgs, boolean isParallelExecution) {
@@ -124,17 +123,12 @@ public class CreateTestExecutableTask implements Task {
         }
         for (PackageDescriptor descriptor : topologicallySortedList) {
             try {
-                execute(workspace.getPackage(descriptor), new Target(workspace.target(descriptor)));
+                execute(workspace.getPackage(descriptor), new Target(workspace.targetDir(descriptor)));
             } catch (ProjectException | IOException e) {
                 throw createLauncherException("unable to create test executable: " + e.getMessage());
             }
         }
 
-    }
-
-    @Override
-    public void execute(Project project) {
-        execute(project.currentPackage(), getTarget(project));
     }
 
     public void execute(Package pkg, Target target) {

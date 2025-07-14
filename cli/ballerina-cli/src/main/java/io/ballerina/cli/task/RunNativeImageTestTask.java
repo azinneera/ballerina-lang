@@ -23,6 +23,7 @@ import io.ballerina.cli.utils.GraalVMCompatibilityUtils;
 import io.ballerina.cli.utils.NativeUtils;
 import io.ballerina.cli.utils.TestUtils;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JarResolver;
 import io.ballerina.projects.JvmTarget;
@@ -31,6 +32,7 @@ import io.ballerina.projects.ModuleDescriptor;
 import io.ballerina.projects.ModuleName;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
@@ -138,32 +140,41 @@ public class RunNativeImageTestTask implements Task {
 
     @Override
     public void execute(Workspace workspace) {
-        
-    }
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.projectPath != null) {
+            PackageDescriptor packageDependency = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency)
+                                    .equals(this.projectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(packageDependency).contains(pkg)
+                            && !pkg.equals(packageDependency));
+        }
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            Path cachesRoot;
+            Target target;
+            try {
+                if (workspace.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+                    cachesRoot = Files.createTempDirectory("ballerina-test-cache" + System.nanoTime());
+                    target = new Target(cachesRoot);
 
-    @Override
-    public void execute(Project project) {
-        Path cachesRoot;
-        Target target;
-        Path testsCachePath;
-        try {
-            if (project.kind() == ProjectKind.BUILD_PROJECT) {
-                cachesRoot = project.sourceRoot();
-                target = new Target(project.targetDir());
-            } else {
-                cachesRoot = Files.createTempDirectory("ballerina-test-cache" + System.nanoTime());
-                target = new Target(cachesRoot);
+                } else {
+                    cachesRoot = workspace.sourceRoot(descriptor);
+                    target = new Target(workspace.targetDir(descriptor));
+                }
+
+                execute(workspace.getPackage(descriptor), target, cachesRoot);
+            } catch (IOException e) {
+                throw createLauncherException("error while creating target directory: ", e);
             }
-
-            testsCachePath = target.getTestsCachePath();
-        } catch (IOException e) {
-            throw createLauncherException("error while creating target directory: ", e);
         }
     }
     
     public void execute(Package pkg, Target target, Path cachesRoot) throws IOException {
         BuildOptions buildOptions = pkg.workspace().buildOptions(pkg.descriptor());
-        if (buildOptions.nativeImage() || buildOptions.cloud().equals("docker")) {
+        if (!buildOptions.nativeImage() || buildOptions.cloud().equals("docker")) {
             return;
         }
         long start = 0;

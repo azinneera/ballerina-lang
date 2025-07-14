@@ -17,8 +17,10 @@
  */
 package io.ballerina.cli.task;
 
+import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import org.ballerinalang.docgen.docs.BallerinaDocGenerator;
 
@@ -37,15 +39,23 @@ public class CreateDocsTask implements Task {
 
     private final transient PrintStream out;
     private Path outputPath;
+    private final Path projectPath;
 
-    public CreateDocsTask(PrintStream out, Path outputPath) {
+    public CreateDocsTask(PrintStream out, Path outputPath, Path projectPath) {
         this.out = out;
         this.outputPath = outputPath;
+        this.projectPath = projectPath;
     }
 
-    @Override
-    public void execute(Project project) {
-        Path sourceRootPath = project.targetDir();
+    public void execute(Workspace workspace) {
+        Package pkg = workspace.packages().stream().filter(aPackage ->
+                aPackage.workspace().sourceRoot(
+                        aPackage.descriptor()).equals(projectPath)).findFirst().orElseThrow();
+        execute(pkg, workspace);
+    }
+
+    private void execute(Package pkg, Workspace workspace) {
+        Path sourceRootPath = workspace.targetDir(pkg.descriptor());
         Target target;
         if (outputPath == null) {
             try {
@@ -57,12 +67,11 @@ public class CreateDocsTask implements Task {
         }
         this.out.println("Generating API Documentation");
         try {
-            BallerinaDocGenerator.generateAPIDocs(project, outputPath.toString(), false);
+            BallerinaDocGenerator.generateAPIDocs(pkg, outputPath.toString(), false);
             this.out.println("Saved to: " + sourceRootPath.relativize(outputPath).toString());
 
         } catch (IOException e) {
             throw createLauncherException("Unable to generate API Documentation.", e.getCause());
         }
-
     }
 }

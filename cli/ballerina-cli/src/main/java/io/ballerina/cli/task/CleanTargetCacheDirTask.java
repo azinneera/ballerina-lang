@@ -18,11 +18,16 @@
 
 package io.ballerina.cli.task;
 
-import io.ballerina.projects.Project;
+import io.ballerina.projects.DependencyGraph;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 
@@ -32,13 +37,37 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
  * @since 2.0.0
  */
 public class CleanTargetCacheDirTask implements Task {
+    private final Path absProjectPath;
+
+    public CleanTargetCacheDirTask(Path absProjectPath) {
+        this.absProjectPath = absProjectPath;
+    }
+
+    public CleanTargetCacheDirTask() {
+        absProjectPath = null;
+    }
+
     @Override
-    public void execute(Project project) {
-        try {
-            Target target = new Target(project.targetDir());
-            target.cleanCache();
-        } catch (IOException | ProjectException e) {
-            throw createLauncherException("unable to clean the target cache directory: " + e.getMessage());
+    public void execute(Workspace workspace) {
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.absProjectPath != null) {
+            PackageDescriptor descriptor = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency)
+                                    .equals(this.absProjectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(descriptor).contains(pkg)
+                            && !pkg.equals(descriptor));
+        }
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            try {
+                Target target = new Target(workspace.targetDir(descriptor));
+                target.cleanCache();
+            } catch (IOException | ProjectException e) {
+                throw createLauncherException("unable to clean the target cache directory: " + e.getMessage());
+            }
         }
     }
 }

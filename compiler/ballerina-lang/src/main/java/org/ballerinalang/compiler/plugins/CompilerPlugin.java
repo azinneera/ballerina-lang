@@ -129,13 +129,26 @@ public interface CompilerPlugin {
     void process(AnnotationNode annotationNode, List<AnnotationAttachmentNode> annotations);
 
     /**
+     * @deprecated Use {@link #codeAnalyze(Package)} instead.
      * Analyse Project.
      * This triggers after the project gets compiled.
      *
      * @param project Project instance
      * @return
      */
+    @Deprecated
     default List<Diagnostic> codeAnalyze(Project project) {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Analyse Project.
+     * This triggers after the project gets compiled.
+     *
+     * @param pkg Package instance
+     * @return
+     */
+    default List<Diagnostic> codeAnalyze(Package pkg) {
         return Collections.emptyList();
     }
 
@@ -148,11 +161,13 @@ public interface CompilerPlugin {
     void codeGenerated(PackageID packageID, Path binaryPath);
 
     /**
+     * @deprecated Use {@link #codeGenerated(Package, Target)} instead.
      * Notifies when the code generated phase is completed.
      *
      * @param project Project instance
      * @param target Target directory
      */
+    @Deprecated
     default void codeGenerated(Project project, Target target) {
 
     }

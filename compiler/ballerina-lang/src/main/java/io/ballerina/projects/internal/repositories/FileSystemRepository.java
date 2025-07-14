@@ -27,9 +27,9 @@ import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageName;
 import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.environment.Environment;
 import io.ballerina.projects.environment.ResolutionOptions;
@@ -109,8 +109,8 @@ public class FileSystemRepository extends AbstractPackageRepository {
         ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getBuilder(environment);
         environmentBuilder = environmentBuilder.addCompilationCacheFactory(
                 new FileSystemCache.FileSystemCacheFactory(cacheDir));
-        Project project = BalaProject.loadProject(environmentBuilder, balaPath);
-        return Optional.of(project.currentPackage());
+        Workspace workspace = Workspace.load(balaPath, environmentBuilder);
+        return Optional.of(workspace.packages().get(0));
     }
 
     /**

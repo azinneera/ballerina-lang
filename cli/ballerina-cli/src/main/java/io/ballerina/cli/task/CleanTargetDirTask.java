@@ -20,15 +20,12 @@ package io.ballerina.cli.task;
 
 import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.PackageDescriptor;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
-import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
-import io.ballerina.projects.util.ProjectUtils;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,16 +59,6 @@ public class CleanTargetDirTask implements Task {
     }
 
     @Override
-    public void execute(Project project) {
-        try {
-            Target target = new Target(project.targetDir());
-            target.clean(this.isPackageModified, this.isCachesEnabled);
-        } catch (IOException | ProjectException e) {
-            throw createLauncherException("unable to clean the target directory: " + e.getMessage());
-        }
-    }
-
-    @Override
     public void execute(Workspace workspace) {
         try {
             DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
@@ -87,7 +74,11 @@ public class CleanTargetDirTask implements Task {
                                 && !pkg.equals(descriptor));
             }
             for (PackageDescriptor descriptor : topologicallySortedList) {
-                Target target = new Target(workspace.target(descriptor));
+                Path targetPath = workspace.targetDir(descriptor);
+                if (Files.notExists(targetPath)) {
+                    continue;
+                }
+                Target target = new Target(targetPath);
                 target.clean();
             }
         } catch (IOException | ProjectException e) {

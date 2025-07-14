@@ -36,13 +36,6 @@ public class TaskExecutor {
     private TaskExecutor() {
     }
 
-    @Deprecated
-    public void executeTasks(Project project) {
-        for (Task task : tasks) {
-            task.execute(project);
-        }
-    }
-
     public void executeTasks(Workspace workspace) {
         for (Task task : tasks) {
             task.execute(workspace);

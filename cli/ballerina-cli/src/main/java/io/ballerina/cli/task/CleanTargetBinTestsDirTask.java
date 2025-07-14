@@ -16,11 +16,16 @@
 
 package io.ballerina.cli.task;
 
-import io.ballerina.projects.Project;
+import io.ballerina.projects.DependencyGraph;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 
@@ -30,17 +35,42 @@ import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
  * @since 2201.9.0
  */
 public class CleanTargetBinTestsDirTask implements Task {
+    private final Path absProjectPath;
+
+    public CleanTargetBinTestsDirTask() {
+        absProjectPath = null;
+    }
+
+    public CleanTargetBinTestsDirTask(Path projectPath) {
+        absProjectPath = projectPath;
+    }
+
     @Override
-    public void execute(Project project) {
-        boolean isTestingDelegated = project.buildOptions().cloud().equals("docker");
-        if (isTestingDelegated) {
-            return;
+    public void execute(Workspace workspace) {
+        DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
+        List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
+                dependencyGraph.toTopologicallySortedList());
+        if (this.absProjectPath != null) {
+            PackageDescriptor descriptor = topologicallySortedList.stream().filter(
+                            dependency -> workspace.sourceRoot(dependency)
+                                    .equals(this.absProjectPath))
+                    .findFirst().orElseThrow();
+            topologicallySortedList.removeIf(pkg ->
+                    !dependencyGraph.getAllDependencies(descriptor).contains(pkg)
+                            && !pkg.equals(descriptor));
         }
-        try {
-            Target target = new Target(project.targetDir());
-            target.cleanBinTests();
-        } catch (IOException | ProjectException e) {
-            throw createLauncherException("unable to clean the target bin's tests directory: " + e.getMessage());
+
+        for (PackageDescriptor descriptor : topologicallySortedList) {
+            boolean isTestingDelegated = workspace.buildOptions(descriptor).cloud().equals("docker");
+            if (isTestingDelegated) {
+                continue;
+            }
+            try {
+                Target target = new Target(workspace.targetDir(descriptor));
+                target.cleanBinTests();
+            } catch (IOException | ProjectException e) {
+                throw createLauncherException("unable to clean the target bin's tests directory: " + e.getMessage());
+            }
         }
     }
 }

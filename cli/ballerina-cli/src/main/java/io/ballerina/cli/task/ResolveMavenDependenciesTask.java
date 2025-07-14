@@ -24,7 +24,6 @@ import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.Project;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import org.ballerinalang.maven.Dependency;
 import org.ballerinalang.maven.MavenResolver;
@@ -57,10 +56,6 @@ public class ResolveMavenDependenciesTask implements Task {
     }
 
     @Override
-    public void execute(Project project) {
-        execute(project.currentPackage(), project.targetDir());
-    }
-    @Override
     public void execute(Workspace workspace) {
         DependencyGraph<PackageDescriptor> dependencyGraph = workspace.dependencyGraph();
         List<PackageDescriptor> topologicallySortedList = new ArrayList<>(
@@ -74,7 +69,7 @@ public class ResolveMavenDependenciesTask implements Task {
                             && !pkg.equals(packageDependency));
         }
         for (PackageDescriptor descriptor : topologicallySortedList) {
-            execute(workspace.getPackage(descriptor), workspace.target(descriptor));
+            execute(workspace.getPackage(descriptor), workspace.targetDir(descriptor));
         }
     }
 

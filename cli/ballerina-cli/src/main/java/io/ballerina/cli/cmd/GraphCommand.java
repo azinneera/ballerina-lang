@@ -26,18 +26,23 @@ import io.ballerina.cli.task.ResolveMavenDependenciesTask;
 import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
-import io.ballerina.projects.directory.BuildProject;
-import io.ballerina.projects.directory.SingleFileProject;
+import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
+import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.GRAPH_COMMAND;
+import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 
 /**
  * This class represents the "bal graph" command.
@@ -46,7 +51,6 @@ import static io.ballerina.cli.cmd.Constants.GRAPH_COMMAND;
  */
 @CommandLine.Command(name = GRAPH_COMMAND, description = "Print the dependency graph in the console")
 public class GraphCommand implements BLauncherCmd {
-    private Project project;
     private final PrintStream outStream;
     private final PrintStream errStream;
     private final boolean exitWhenFinish;
@@ -91,44 +95,56 @@ public class GraphCommand implements BLauncherCmd {
             return;
         }
 
-        try {
-            loadProject();
-        } catch (ProjectException e) {
-            printErrorAndExit(e.getMessage());
+        // load project
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is a workspace, please specify a package or a source file to run",
+                    null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
             return;
+        }
+
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions();
+
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        Target target;
+        try {
+            if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
+                target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
+                target.setOutputPath(target.getBinPath());
+            }
+        } catch (IOException e) {
+            throw createLauncherException("unable to resolve the target path:" + e.getMessage());
+        } catch (ProjectException e) {
+            throw createLauncherException("unable to create the executable:" + e.getMessage());
         }
 
         validateSettingsToml();
 
+        Path absProjectPath = this.projectPath.toAbsolutePath().normalize();
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-                .addTask(new CleanTargetDirTask(true, false), isSingleFileProject())
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileProject())
-                .addTask(new ResolveMavenDependenciesTask(outStream))
-                .addTask(new CreateDependencyGraphTask(outStream, errStream))
+                .addTask(new CleanTargetDirTask(absProjectPath), isSingleFileProject())
+                .addTask(new RunBuildToolsTask(outStream, absProjectPath), isSingleFileProject())
+                .addTask(new ResolveMavenDependenciesTask(outStream, absProjectPath), isSingleFileProject())
+                .addTask(new CreateDependencyGraphTask(outStream, errStream, absProjectPath))
                 .build();
-        taskExecutor.executeTasks(this.project);
-
+        taskExecutor.executeTasks(workspace);
         exitIfRequired();
     }
 
     private void printHelpCommandInfo() {
         String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(GRAPH_COMMAND);
         this.outStream.println(commandUsageInfo);
-    }
-
-    private void loadProject() {
-        BuildOptions buildOptions = constructBuildOptions();
-
-        if (isSingleFileProject()) {
-            this.project = SingleFileProject.load(this.projectPath, buildOptions);
-        } else {
-            this.project = BuildProject.load(this.projectPath, buildOptions);
-        }
-    }
-
-    private void printErrorAndExit(String errorMessage) {
-        CommandUtil.printError(this.errStream, errorMessage, null, false);
-        CommandUtil.exitError(this.exitWhenFinish);
     }
 
     private void validateSettingsToml() {
@@ -142,7 +158,6 @@ public class GraphCommand implements BLauncherCmd {
     }
 
     private BuildOptions constructBuildOptions() {
-
         // if all dependency graphs are printed it includes the final graph.
         // Therefore, final graph is not needed to print separately.
         boolean dumpGraph = !dumpRawGraphs;

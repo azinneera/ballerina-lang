@@ -360,6 +360,13 @@ public final class ProjectPaths {
         return false;
     }
 
+    public static boolean isBalaRoot(Path filePath) {
+        if (FileUtils.hasExtension(filePath)) {
+            return filePath.toAbsolutePath().normalize().endsWith(ProjectConstants.BLANG_COMPILED_PKG_BINARY_EXT);
+        }
+        return hasPackageJson(filePath);
+    }
+
     public static boolean isWorkspaceRoot(Path filePath) {
         Path absFilePath = filePath.resolve(BALLERINA_TOML).toAbsolutePath().normalize();
         if (absFilePath.toFile().exists()) {

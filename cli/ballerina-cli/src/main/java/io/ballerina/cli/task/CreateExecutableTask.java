@@ -30,7 +30,6 @@ import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.PackageDescriptor;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.Workspace;
@@ -62,8 +61,8 @@ public class CreateExecutableTask implements Task {
     private final boolean isHideTaskOutput;
     private final Path projectPath;
 
-    public CreateExecutableTask(PrintStream outStream, String output, Object target, boolean isHideTaskOutput) {
-        this(outStream, output, target instanceof Target ? (Target) target : null, isHideTaskOutput, null);
+    public CreateExecutableTask(PrintStream outStream, String output, boolean isHideTaskOutput) {
+        this(outStream, output, null, isHideTaskOutput, null);
     }
 
     public CreateExecutableTask(PrintStream out, String output, Target target, boolean isHideTaskOutput, Path projectPath) {
@@ -101,13 +100,8 @@ public class CreateExecutableTask implements Task {
                 continue;
             }
             execute(workspace.getPackage(descriptor), workspace.buildOptions(descriptor),
-                    workspace.sourceRoot(descriptor), workspace.target(descriptor));
+                    workspace.sourceRoot(descriptor), workspace.targetDir(descriptor));
         }
-    }
-
-    @Override
-    public void execute(Project project) {
-        execute(project.currentPackage(), project.buildOptions(), project.sourceRoot(), project.targetDir());
     }
 
     public void execute(Package pkg, BuildOptions buildOptions, Path sourceRoot, Path targetPath) {

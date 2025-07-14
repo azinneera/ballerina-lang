@@ -23,27 +23,28 @@ import io.ballerina.cli.TaskExecutor;
 import io.ballerina.cli.task.CleanTargetDirTask;
 import io.ballerina.cli.task.CompileTask;
 import io.ballerina.cli.task.CreateExecutableTask;
-import io.ballerina.cli.task.DumpBuildTimeTask;
 import io.ballerina.cli.task.ResolveMavenDependenciesTask;
 import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.task.RunProfilerTask;
-import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.directory.BuildProject;
-import io.ballerina.projects.directory.SingleFileProject;
+import io.ballerina.projects.Workspace;
+import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import picocli.CommandLine;
 
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.PROFILE_COMMAND;
-import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
+import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
 import static io.ballerina.runtime.api.constants.RuntimeConstants.SYSTEM_PROP_BAL_DEBUG;
 import static io.ballerina.runtime.api.constants.RuntimeConstants.SYSTEM_PROP_PROFILE_DEBUG;
 
@@ -119,16 +120,50 @@ public class ProfileCommand implements BLauncherCmd {
         setupDebugPort();
         setupProfileDebugPort();
         String[] args = getArgumentsFromArgList();
-        BuildOptions buildOptions = constructBuildOptions();
-        Project project = loadProject(buildOptions);
-        if (project == null) {
+
+        // load project
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is a workspace, please specify a package or a source file to run",
+                    null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is not a valid Ballerina package: "
+                            + this.projectPath.toAbsolutePath(), null, true);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
-        boolean isPackageModified = isProjectUpdated(project);
-        TaskExecutor taskExecutor = createTaskExecutor(isPackageModified, args, buildOptions,
-                project.kind() == ProjectKind.SINGLE_FILE_PROJECT);
-        taskExecutor.executeTasks(project);
+
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions(workspaceRoot.isPresent());
+
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        Target target = null;
+        try {
+            if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
+                target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
+                target.setOutputPath(target.getBinPath());
+            }
+        } catch (IOException e) {
+            throw createLauncherException("unable to resolve the target path:" + e.getMessage());
+        } catch (ProjectException e) {
+            throw createLauncherException("unable to create the executable:" + e.getMessage());
+        }
+
+        TaskExecutor taskExecutor = createTaskExecutor(target,
+                workspace.kind() == ProjectKind.SINGLE_FILE_PROJECT);
+        taskExecutor.executeTasks(workspace);
     }
 
     private void setupProfileDebugPort() {
@@ -166,43 +201,15 @@ public class ProfileCommand implements BLauncherCmd {
         return args;
     }
 
-    private Project loadProject(BuildOptions buildOptions) {
-        if (FileUtils.hasExtension(this.projectPath)) {
-            return loadSingleFileProject(buildOptions);
-        } else {
-            return loadBuildProject(buildOptions);
-        }
-    }
-
-    private Project loadSingleFileProject(BuildOptions buildOptions) {
-        try {
-            return SingleFileProject.load(this.projectPath, buildOptions);
-        } catch (ProjectException e) {
-            CommandUtil.printError(this.errStream, e.getMessage(), PROFILE_CMD, false);
-            return null;
-        }
-    }
-
-    private Project loadBuildProject(BuildOptions buildOptions) {
-        try {
-            return BuildProject.load(this.projectPath, buildOptions);
-        } catch (ProjectException e) {
-            CommandUtil.printError(this.errStream, e.getMessage(), PROFILE_CMD, false);
-            return null;
-        }
-    }
-
-    private TaskExecutor createTaskExecutor(boolean isPackageModified, String[] args, BuildOptions buildOptions,
-                                            boolean isSingleFileBuild) {
+    private TaskExecutor createTaskExecutor(Target target, boolean isSingleFileBuild) {
+        Path projectPath = this.projectPath.toAbsolutePath().normalize();
         return new TaskExecutor.TaskBuilder()
-                .addTask(new CleanTargetDirTask(isPackageModified, buildOptions.enableCache()), isSingleFileBuild)
-                .addTask(new RunBuildToolsTask(outStream), isSingleFileBuild)
-                .addTask(new ResolveMavenDependenciesTask(outStream))
-                .addTask(new CompileTask(outStream, errStream, false, false, isPackageModified,
-                        buildOptions.enableCache()))
-                .addTask(new CreateExecutableTask(outStream, null, null, false), false)
-                .addTask(new DumpBuildTimeTask(outStream), false)
-                .addTask(new RunProfilerTask(errStream), false).build();
+                .addTask(new CleanTargetDirTask(projectPath), isSingleFileBuild)
+                .addTask(new RunBuildToolsTask(outStream, projectPath), isSingleFileBuild)
+                .addTask(new ResolveMavenDependenciesTask(outStream, projectPath), isSingleFileBuild)
+                .addTask(new CompileTask(outStream, errStream, false, false, projectPath))
+                .addTask(new CreateExecutableTask(outStream, null, target, false, projectPath))
+                .addTask(new RunProfilerTask(errStream, target, projectPath)).build();
     }
 
     @Override
@@ -224,7 +231,7 @@ public class ProfileCommand implements BLauncherCmd {
     public void setParentCmdParser(CommandLine parentCmdParser) {
     }
 
-    private BuildOptions constructBuildOptions() {
+    private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
 
         buildOptionsBuilder
@@ -237,7 +244,7 @@ public class ProfileCommand implements BLauncherCmd {
                 .setShowDependencyDiagnostics(showDependencyDiagnostics)
                 .setOptimizeDependencyCompilation(optimizeDependencyCompilation);
 
-        if (targetDir != null) {
+        if (targetDir != null && !workspaceBuild) {
             buildOptionsBuilder.targetDir(targetDir.toString());
         }
 

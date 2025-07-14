@@ -20,11 +20,9 @@ package io.ballerina.cli.task;
 
 import io.ballerina.cli.launcher.RuntimePanicException;
 import io.ballerina.cli.utils.BuildTime;
-import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import org.wso2.ballerinalang.util.Lists;
@@ -54,10 +52,6 @@ public class RunExecutableTask implements Task {
     private Process process;
     private final Path projectPath;
 
-
-    public RunExecutableTask(String[] args, PrintStream out, PrintStream err, Target target) {
-        this(args, out, err, target, null);
-    }
     /**
      * Create a task to run the executable. This requires {@link CreateExecutableTask} to be completed.
      *
@@ -74,37 +68,13 @@ public class RunExecutableTask implements Task {
     }
 
     @Override
-    public void execute(Project project) {
-        long start = 0;
-        if (project.buildOptions().dumpBuildTime()) {
-            start = System.currentTimeMillis();
-        }
-
-        out.println();
-        out.println("Running executable");
-        out.println();
-
-        try {
-            if (target == null) {
-                target = new Target(project.targetDir());
-            }
-            this.runGeneratedExecutable(project.currentPackage());
-        } catch (ProjectException | IOException e) {
-            throw createLauncherException(e.getMessage());
-        }
-        if (project.buildOptions().dumpBuildTime()) {
-            BuildTime.getInstance().runningExecutableDuration = System.currentTimeMillis() - start;
-        }
-    }
-
-    @Override
     public void execute(Workspace workspace) {
         Package pkg = workspace.packages().stream().filter(aPackage ->
                 aPackage.workspace().sourceRoot(
                 aPackage.descriptor()).equals(projectPath)).findFirst().orElseThrow();
         if (target == null) {
             try {
-                target = new Target(workspace.target(pkg.descriptor()));
+                target = new Target(workspace.targetDir(pkg.descriptor()));
             } catch (ProjectException | IOException e) {
                 throw createLauncherException(e.getMessage());
             }

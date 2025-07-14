@@ -31,7 +31,6 @@ import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
@@ -173,41 +172,15 @@ public class RunTestsTask implements Task {
             }
             Target target;
             try {
-                target = new Target(workspace.target(descriptor));
+                target = new Target(workspace.targetDir(descriptor));
             } catch (IOException e) {
                 throw createLauncherException("error while creating target directory: ", e);
             }
             execute(workspace.getPackage(descriptor), target, coverageModules);
         }
     }
-    @Override
-    public void execute(Project project) {
-        Iterable<Module> originalModules = project.currentPackage().modules();
-        Map<String, Module> coverageModules = new HashMap<>();
 
-        for (Module originalModule : originalModules) {
-            coverageModules.put(originalModule.moduleName().toString(), originalModule);
-        }
-        execute(project.currentPackage(), getTarget(project), coverageModules);
-    }
-
-    private static Target getTarget(Project project) {
-        Target target;
-        Path cachesRoot;
-        try {
-            if (project.kind() == ProjectKind.BUILD_PROJECT) {
-                target = new Target(project.targetDir());
-            } else {
-                cachesRoot = Files.createTempDirectory("ballerina-test-cache" + System.nanoTime());
-                target = new Target(cachesRoot);
-            }
-        } catch (IOException e) {
-            throw createLauncherException("error while creating target directory: ", e);
-        }
-        return target;
-    }
-
-    public void execute(Package pkg, Target target, Map<String, Module> coverageModules) {
+    private void execute(Package pkg, Target target, Map<String, Module> coverageModules) {
         BuildOptions buildOptions = pkg.workspace().buildOptions(pkg.descriptor());
         if (buildOptions.nativeImage() || buildOptions.cloud().equals("docker")) {
             return;

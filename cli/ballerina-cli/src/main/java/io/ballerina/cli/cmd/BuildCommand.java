@@ -28,31 +28,22 @@ import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.cli.utils.BuildTime;
 import io.ballerina.cli.utils.FileUtils;
 import io.ballerina.projects.BuildOptions;
-import io.ballerina.projects.DependencyGraph;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
-import io.ballerina.projects.ResolvedPackageDependency;
-import io.ballerina.projects.directory.BuildProject;
-import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.Workspace;
-import io.ballerina.projects.internal.model.Target;
-import io.ballerina.projects.util.DependencyUtils;
 import io.ballerina.projects.util.ProjectConstants;
 import io.ballerina.projects.util.ProjectPaths;
 import org.wso2.ballerinalang.util.RepoUtils;
 import picocli.CommandLine;
 
-import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.BUILD_COMMAND;
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
-import static io.ballerina.projects.util.ProjectUtils.isProjectUpdated;
 
 /**
  * This class represents the "bal build" command.
@@ -306,18 +297,7 @@ public class BuildCommand implements BLauncherCmd {
                 }
             }
         }
-        Target target = null;
-//        try {
-//            if (workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT)) {
-//                target = new Target(Files.createTempDirectory("ballerina-cache" + System.nanoTime()));
-//                target.setOutputPath(target.getBinPath());
-//            }
-//        } catch (IOException e) {
-//            throw createLauncherException("unable to resolve the target path:" + e.getMessage());
-//        } catch (ProjectException e) {
-//            throw createLauncherException("unable to create the executable:" + e.getMessage());
-//        }
-        buildWorkspace(workspace, buildOptions, target);
+        buildWorkspace(workspace);
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
@@ -339,7 +319,7 @@ public class BuildCommand implements BLauncherCmd {
         taskExecutor.executeTasks(workspace);
     }
 
-    private void buildWorkspace(Workspace workspace, BuildOptions buildOptions, Target target) {
+    private void buildWorkspace(Workspace workspace) {
         boolean isSingleFile = workspace.kind().equals(ProjectKind.SINGLE_FILE_PROJECT);
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
                 // clean the target directory(projects only)
@@ -351,7 +331,7 @@ public class BuildCommand implements BLauncherCmd {
                 // compile the modules
                 .addTask(new CompileTask(outStream, errStream, false, true,
                         true, false))
-                .addTask(new CreateExecutableTask(outStream, output, target, false))
+                .addTask(new CreateExecutableTask(outStream, output, false))
                 .addTask(new DumpBuildTimeTask(outStream))
                 .build();
         taskExecutor.executeTasks(workspace);

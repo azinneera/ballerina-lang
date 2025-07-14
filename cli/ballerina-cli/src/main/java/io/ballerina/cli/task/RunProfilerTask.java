@@ -19,8 +19,11 @@
 package io.ballerina.cli.task;
 
 import io.ballerina.cli.launcher.RuntimePanicException;
+import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.internal.model.Target;
 
 import java.io.File;
@@ -49,22 +52,36 @@ import static io.ballerina.runtime.api.constants.RuntimeConstants.BALLERINA_HOME
  */
 public class RunProfilerTask implements Task {
     private final PrintStream err;
+    private final Path projectPath;
+    private final Target target;
     private static final String JAVA_OPTS = "JAVA_OPTS";
     private static final String CURRENT_DIR_KEY = "current.dir";
     private static final Path TARGET_OUTPUT_PATH = Path.of(System.getProperty(USER_DIR));
 
-    public RunProfilerTask(PrintStream errStream) {
+    public RunProfilerTask(PrintStream errStream, Target target, Path projectPath) {
         this.err = errStream;
+        this.projectPath = projectPath;
+        this.target = target;
     }
 
-    private void initiateProfiler(Project project) {
+    @Override
+    public void execute(Workspace workspace) {
+        Package pkg = workspace.packages().stream().filter(aPackage ->
+                        workspace.sourceRoot(aPackage.descriptor()).equals(this.projectPath))
+                .findFirst()
+                .orElseThrow();
+        initiateProfiler(pkg, workspace);
+    }
+
+    private void initiateProfiler(Package pkg, Workspace workspace) {
         String profilerSource = Path.of(System.getProperty(BALLERINA_HOME), "bre", "lib",
                 "ballerina-profiler-1.0.jar").toString();
         Path sourcePath = Path.of(profilerSource);
-        Path targetPath = getTargetProfilerPath(project);
+        Path targetPath = null;
         StandardCopyOption copyOption = StandardCopyOption.REPLACE_EXISTING;
         String javaOpts = System.getenv().get(JAVA_OPTS);
         try {
+            targetPath = getTargetProfilerPath(target);
             Files.copy(sourcePath, targetPath, copyOption);
             List<String> commands = new ArrayList<>();
             commands.add(System.getProperty("java.command"));
@@ -78,7 +95,7 @@ public class RunProfilerTask implements Task {
             commands.add("Profiler.jar");
             // Sets classpath with executable thin jar and all dependency jar paths.
             commands.add("--file");
-            commands.add(getTargetFilePath(project));
+            commands.add(getTargetFilePath(workspace, pkg.descriptor()));
             if (isInProfileDebugMode()) {
                 commands.add("--profiler-debug");
                 commands.add(getProfileDebugArg(err));
@@ -90,7 +107,7 @@ public class RunProfilerTask implements Task {
             pb.environment().put(BALLERINA_HOME, System.getProperty(BALLERINA_HOME));
             pb.environment().put(CURRENT_DIR_KEY, System.getProperty(USER_DIR));
             pb.environment().put("java.command", System.getProperty("java.command"));
-            pb.directory(new File(getProfilerPath(project).toUri()));
+            pb.directory(new File(target.getProfilerPath().toUri()));
             Process process = pb.start();
             process.waitFor();
             int exitValue = process.exitValue();
@@ -101,20 +118,22 @@ public class RunProfilerTask implements Task {
             throw createLauncherException("error occurred while running the profiler ", e);
         } finally {
             try {
-                Files.deleteIfExists(targetPath);
+                if (targetPath != null) {
+                    Files.deleteIfExists(targetPath);
+                }
             } catch (IOException e) {
                 err.println("error occurred while deleting the profiler.jar file");
             }
         }
     }
 
-    @Override
-    public void execute(Project project) {
-        initiateProfiler(project);
-    }
+//    @Override
+//    public void execute(Project project) {
+//        initiateProfiler(project);
+//    }
 
-    private Path getTargetProfilerPath(Project project) {
-        return getProfilerPath(project).resolve("Profiler" + BLANG_COMPILED_JAR_EXT);
+    private Path getTargetProfilerPath(Target target) throws IOException {
+        return target.getProfilerPath().resolve("Profiler" + BLANG_COMPILED_JAR_EXT);
     }
 
     private Path getProfilerPath(Project project) {
@@ -133,12 +152,13 @@ public class RunProfilerTask implements Task {
         return project.targetDir();
     }
 
-    private String getTargetFilePath(Project project) {
-        if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
-            return Path.of(TARGET_OUTPUT_PATH.resolve(getFileNameWithoutExtension(project.sourceRoot()) +
+    private String getTargetFilePath(Workspace workspace, PackageDescriptor descriptor) {
+        if (workspace.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+            return Path.of(TARGET_OUTPUT_PATH.resolve(getFileNameWithoutExtension(
+                    workspace.sourceRoot(descriptor)) +
                     BLANG_COMPILED_JAR_EXT).toUri()).toString();
         }
-        return Path.of(project.targetDir().resolve("bin").resolve(project.currentPackage().packageName() +
-                BLANG_COMPILED_JAR_EXT).toUri()).toString();
+        return Path.of(workspace.targetDir(descriptor).resolve("bin")
+                .resolve(descriptor.name() + BLANG_COMPILED_JAR_EXT).toUri()).toString();
     }
 }

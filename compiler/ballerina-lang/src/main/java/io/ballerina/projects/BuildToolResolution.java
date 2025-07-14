@@ -61,7 +61,7 @@ public class BuildToolResolution {
         resolvedTools = new ArrayList<>();
         diagnosticList = new ArrayList<>();
         this.packageContext = packageContext;
-        resolveToolDependencies();
+        resolveToolDependencies(packageContext);
     }
 
     static BuildToolResolution from(PackageContext packageContext) {
@@ -86,9 +86,9 @@ public class BuildToolResolution {
         return resolvedTools;
     }
 
-    private void resolveToolDependencies() {
-        Project currentProject = packageContext.project();
-        Map<PackageManifest.Tool.Field, ToolContext> toolContextMap = currentProject.getToolContextMap();
+    private void resolveToolDependencies(PackageContext packageContext) {
+        Map<PackageManifest.Tool.Field, ToolContext> toolContextMap = packageContext.workspace()
+                .toolContextMap(packageContext.descriptor());
         if (toolContextMap == null || toolContextMap.isEmpty()) {
             return;
         }
@@ -104,10 +104,10 @@ public class BuildToolResolution {
             }
         }
 
-        PackageLockingMode packageLockingMode = getPackageLockingMode(currentProject);
-        updateLockedToolDependencyVersions(buildTools, currentProject);
+        PackageLockingMode packageLockingMode = getPackageLockingMode(packageContext);
+        updateLockedToolDependencyVersions(buildTools, packageContext);
         List<BuildTool> resolvedTools = resolveToolVersions(packageLockingMode,
-                currentProject.buildOptions().offlineBuild(), buildTools);
+                packageContext.workspace().buildOptions(packageContext.descriptor()).offlineBuild(), buildTools);
         this.resolvedTools.addAll(resolvedTools);
     }
 
@@ -172,11 +172,11 @@ public class BuildToolResolution {
         });
     }
 
-    private PackageLockingMode getPackageLockingMode(Project project) {
-        boolean sticky = ProjectUtils.getSticky(project);
+    private PackageLockingMode getPackageLockingMode(PackageContext packageContext) {
+        boolean sticky = ProjectUtils.getSticky(packageContext.workspace().getPackage(packageContext.descriptor()));
 
         // new project
-        if (project.currentPackage().dependenciesToml().isEmpty()) {
+        if (packageContext.dependenciesTomlContext().isEmpty()) {
             if (sticky) {
                 return PackageLockingMode.MEDIUM;
             }
@@ -187,7 +187,7 @@ public class BuildToolResolution {
         if (sticky) {
             return PackageLockingMode.HARD;
         }
-        SemanticVersion prevDistributionVersion = project.currentPackage().dependencyManifest()
+        SemanticVersion prevDistributionVersion = packageContext.dependencyManifest()
                 .distributionVersion();
         SemanticVersion currentDistributionVersion = SemanticVersion.from(RepoUtils.getBallerinaShortVersion());
 
@@ -292,8 +292,8 @@ public class BuildToolResolution {
         return resolvedTools;
     }
 
-    private void updateLockedToolDependencyVersions(List<BuildTool> unresolvedTools, Project project) {
-        DependencyManifest dependencyManifest = project.currentPackage().dependencyManifest();
+    private void updateLockedToolDependencyVersions(List<BuildTool> unresolvedTools, PackageContext packageContext) {
+        DependencyManifest dependencyManifest = packageContext.dependencyManifest();
         if (dependencyManifest == null || dependencyManifest.tools() == null) {
             return;
         }

@@ -45,12 +45,13 @@ import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageResolution;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.PlatformLibraryScope;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Settings;
+import io.ballerina.projects.Workspace;
+import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.environment.PackageLockingMode;
 import io.ballerina.projects.internal.BalaFiles;
 import io.ballerina.projects.internal.model.BuildJson;
@@ -1006,7 +1007,7 @@ public final class ProjectUtils {
     }
 
     /**
-     * Delete the given directory along with all files and sub directories.
+     * Delete the given directory along with all files and subdirectories.
      *
      * @param directoryPath Directory to delete.
      */
@@ -1073,7 +1074,7 @@ public final class ProjectUtils {
      * @param project project instance
      * @return is project files are updated
      */
-    public static boolean isProjectUpdated(Project project) {
+    public static boolean isProjectUpdated(Workspace project) {
         // If observability included and Syntax Tree Json not in the caches, return true
         Path observeJarCachePath = project.targetDir()
                 .resolve(CACHES_DIR_NAME)
@@ -1308,18 +1309,18 @@ public final class ProjectUtils {
     /**
      * Get the sticky status of a project.
      *
-     * @param project project instance
+     * @param pkg package instance
      * @return true if the project is sticky, false otherwise
      */
-    public static boolean getSticky(Project project) {
-        boolean sticky = project.buildOptions().sticky();
+    public static boolean getSticky(Package pkg) {
+        boolean sticky = pkg.workspace().buildOptions(pkg.descriptor()).sticky();
         if (sticky) {
             return true;
         }
 
         // set sticky only if `build` file exists and `last_update_time` not passed 24 hours
-        if (project.kind() == ProjectKind.BUILD_PROJECT) {
-            Path buildFilePath = project.targetDir().resolve(BUILD_FILE);
+        if (pkg.workspace().kind() == ProjectKind.BUILD_PROJECT) {
+            Path buildFilePath = pkg.workspace().targetDir(pkg.descriptor()).resolve(BUILD_FILE);
             if (Files.exists(buildFilePath) && buildFilePath.toFile().length() > 0) {
                 try {
                     BuildJson buildJson = readBuildJson(buildFilePath);
@@ -1426,6 +1427,10 @@ public final class ProjectUtils {
     public static String getResourcesPath() {
         return "'" + RESOURCE_DIR_NAME + DIR_PATH_SEPARATOR +
                 DOT + WILD_CARD + "'";
+    }
+
+    public static String getBalaVersion(Workspace workspace) {
+        return ((BalaProject) workspace.packages().get(0).project()).balaVersion();
     }
 
     /**

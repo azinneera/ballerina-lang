@@ -72,7 +72,7 @@ public class WorkspaceRepository extends AbstractPackageRepository {
             if (pkg.packageOrg().equals(org)
                     && pkg.packageName().equals(name)) {
                 DependencyGraph<ResolvedPackageDependency> pkgDependencyGraph =
-                        pkg.getResolution().dependencyGraph();
+                        pkg.getResolution(ResolutionOptions.builder().setOffline(true).build()).dependencyGraph();
                 // Convert to DependencyGraph<PackageDescriptor>
                 DependencyGraph.DependencyGraphBuilder<PackageDescriptor> graphBuilder =
                         DependencyGraph.DependencyGraphBuilder.getBuilder();

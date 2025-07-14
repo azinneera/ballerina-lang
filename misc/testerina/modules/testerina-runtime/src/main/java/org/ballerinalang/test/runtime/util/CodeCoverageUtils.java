@@ -20,7 +20,6 @@ package org.ballerinalang.test.runtime.util;
 import io.ballerina.identifier.Utils;
 import io.ballerina.projects.Module;
 import io.ballerina.projects.Package;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.internal.model.Target;
 import io.ballerina.projects.util.ProjectConstants;
 import org.ballerinalang.test.runtime.entity.NormalizedCoverageClass;
@@ -388,7 +387,7 @@ public final class CodeCoverageUtils {
     /**
      * Create jacoco XML report for package.
      *
-     * @param project Project
+     * @param pkg Package instance
      * @param packageExecData List of ExecutionData
      * @param packageNativeClassCovList  List of native class coverages for this package
      * @param packageBalClassCovList List of ballerina class coverages for this package
@@ -402,7 +401,7 @@ public final class CodeCoverageUtils {
                                        List<IClassCoverage> packageBalClassCovList,
                                        List<ISourceFileCoverage> packageSourceCovList,
                                        List<SessionInfo> packageSessionInfo) throws IOException {
-        Target target = new Target(pkg.workspace().target(pkg.descriptor()));
+        Target target = new Target(pkg.workspace().targetDir(pkg.descriptor()));
         String title = target.getTestsCachePath().resolve(TesterinaConstants.COVERAGE_DIR).toFile().getName();
         XMLFormatter xmlFormatter = new XMLFormatter();
         File reportFile = new File(target.getReportPath().resolve(

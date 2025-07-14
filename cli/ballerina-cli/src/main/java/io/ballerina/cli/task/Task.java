@@ -27,10 +27,6 @@ import io.ballerina.projects.Workspace;
  * @since 2.0.0
  */
 public interface Task {
-    @Deprecated (forRemoval = true)
-    default void execute(Project project) {
-        throw new UnsupportedOperationException("This method is deprecated. Use execute(Workspace workspace) instead.");
-    }
 
     default void execute(Workspace workspace) {
 

@@ -26,6 +26,7 @@ import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.syntax.tree.SyntaxTree;
 import io.ballerina.projects.Document;
 import io.ballerina.projects.ModuleReadmeMd;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageManifest;
 import io.ballerina.projects.PackageReadmeMd;
 import io.ballerina.projects.Project;
@@ -220,6 +221,7 @@ public final class BallerinaDocGenerator {
      *  @param output Output path as a string
      *  @param excludeUI Exclude UI elements being copied/generated
      */
+    @Deprecated
     public static void generateAPIDocs(Project project, String output, boolean excludeUI)
             throws IOException {
         Map<String, ModuleDoc> moduleDocMap = generateModuleDocMap(project);
@@ -230,8 +232,38 @@ public final class BallerinaDocGenerator {
         copyIcon(project, Path.of(output), moduleLib);
     }
 
+    /**
+     * API to generate API docs using a Project to a given folder.
+     *  @param pkg package instance
+     *  @param output Output path as a string
+     *  @param excludeUI Exclude UI elements being copied/generated
+     */
+    public static void generateAPIDocs(Package pkg, String output, boolean excludeUI) throws IOException {
+        Map<String, ModuleDoc> moduleDocMap = generateModuleDocMap(pkg);
+        ModuleLibrary moduleLib = new ModuleLibrary();
+        moduleLib.modules = getDocsGenModel(moduleDocMap, pkg.packageOrg().toString(), pkg.packageVersion().toString());
+        writeAPIDocs(moduleLib, Path.of(output), false, excludeUI);
+        copyIcon(pkg, Path.of(output), moduleLib);
+    }
+
+    @Deprecated
     public static void copyIcon(Project project, Path output, ModuleLibrary moduleLib) {
         String sourceLocation = project.currentPackage().manifest().icon();
+        if (!sourceLocation.isEmpty()) {
+            output = output.resolve(moduleLib.modules.get(0).orgName).resolve(moduleLib.modules.get(0).id)
+                    .resolve(moduleLib.modules.get(0).version).resolve(ICON_NAME);
+            Path iconPath = Path.of(sourceLocation);
+            try {
+                byte[] iconByteArray = Files.readAllBytes(iconPath);
+                Files.write(output, iconByteArray);
+            } catch (IOException e) {
+                LOG.error("Failed to copy icon to the API docs.", e);
+            }
+        }
+    }
+
+    public static void copyIcon(Package pkg, Path output, ModuleLibrary moduleLib) {
+        String sourceLocation = pkg.manifest().icon();
         if (!sourceLocation.isEmpty()) {
             output = output.resolve(moduleLib.modules.get(0).orgName).resolve(moduleLib.modules.get(0).id)
                     .resolve(moduleLib.modules.get(0).version).resolve(ICON_NAME);
@@ -544,6 +576,7 @@ public final class BallerinaDocGenerator {
      *  @param project Ballerina project.
      *  @return a map of module names and their ModuleDoc.
      */
+    @Deprecated
     public static Map<String, ModuleDoc> generateModuleDocMap(Project project)
             throws IOException {
         Map<String, PackageManifest.Module> modulesMap = new HashMap<>();
@@ -597,6 +630,66 @@ public final class BallerinaDocGenerator {
         }
         return moduleDocMap;
     }
+
+    /**
+     * Generates a map of module names and their ModuleDoc.
+     *  @param pkg package instance.
+     *  @return a map of module names and their ModuleDoc.
+     */
+    public static Map<String, ModuleDoc> generateModuleDocMap(Package pkg)
+            throws IOException {
+        Map<String, PackageManifest.Module> modulesMap = new HashMap<>();
+        if (pkg.manifest().modules() != null) {
+            for (PackageManifest.Module module : pkg.manifest().modules()) {
+                modulesMap.put(module.name(), module);
+            }
+        }
+
+        Map<String, ModuleDoc> moduleDocMap = new HashMap<>();
+        for (io.ballerina.projects.Module module : pkg.modules()) {
+            String moduleName;
+            String moduleMdText;
+            Path modulePath;
+            String summary = null;
+            if (module.isDefaultModule()) {
+                moduleName = module.moduleName().packageName().toString();
+                modulePath = pkg.workspace().sourceRoot(pkg.descriptor());
+                if (pkg.workspace().kind() == ProjectKind.BALA_PROJECT
+                        && "2.0.0".equals(ProjectUtils.getBalaVersion(pkg.workspace()))) {
+                    moduleMdText = module.readmeMd().map(ModuleReadmeMd::content).orElse("");
+                } else {
+                    moduleMdText = pkg.readmeMd().map(PackageReadmeMd::content).orElse("");
+                }
+                summary = pkg.manifest().description();
+            } else {
+                moduleName = module.moduleName().toString();
+                modulePath = pkg.workspace().sourceRoot(pkg.descriptor())
+                        .resolve(ProjectConstants.MODULES_ROOT).resolve(module.moduleName().moduleNamePart());
+                moduleMdText = module.readmeMd().map(ModuleReadmeMd::content).orElse("");
+                if (modulesMap.containsKey(module.moduleName().toString())) {
+                    summary = modulesMap.get(module.moduleName().toString()).description();
+                }
+            }
+            // Skip modules that are not exported
+            if (!pkg.manifest().exportedModules().contains(moduleName)) {
+                continue;
+            }
+            // find the resources of the package
+            List<Path> resources = getResourcePaths(modulePath);
+            Map<String, SyntaxTree> syntaxTreeMap = new HashMap<>();
+            module.documentIds().forEach(documentId -> {
+                Document document = module.document(documentId);
+                syntaxTreeMap.put(document.name(), document.syntaxTree());
+            });
+            // we cannot remove the module.getCompilation() here since the semantic model is accessed
+            // after the code gen phase here. package.getCompilation() throws an IllegalStateException
+            ModuleDoc moduleDoc = new ModuleDoc(moduleMdText, summary, resources,
+                    syntaxTreeMap, module.getCompilation().getSemanticModel(), module.isDefaultModule());
+            moduleDocMap.put(moduleName, moduleDoc);
+        }
+        return moduleDocMap;
+    }
+
 
     public static String getBallerinaShortVersion() {
         try (InputStream inputStream = BallerinaDocGenerator.class.getResourceAsStream(PROPERTIES_FILE)) {

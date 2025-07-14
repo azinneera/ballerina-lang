@@ -19,19 +19,20 @@ package io.ballerina.cli.cmd;
 
 import io.ballerina.cli.BLauncherCmd;
 import io.ballerina.cli.TaskExecutor;
+import io.ballerina.cli.task.CleanTargetDirTask;
 import io.ballerina.cli.task.CompileTask;
 import io.ballerina.cli.task.CreateDocsTask;
-import io.ballerina.cli.task.CreateTargetDirTask;
 import io.ballerina.cli.task.ResolveMavenDependenciesTask;
 import io.ballerina.cli.task.RunBuildToolsTask;
 import io.ballerina.projects.BuildOptions;
-import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.bala.BalaProject;
-import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.repos.TempDirCompilationCache;
 import io.ballerina.projects.util.ProjectConstants;
+import io.ballerina.projects.util.ProjectPaths;
 import org.ballerinalang.docgen.docs.BallerinaDocGenerator;
 import picocli.CommandLine;
 
@@ -39,6 +40,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import static io.ballerina.cli.cmd.Constants.DOC_COMMAND;
 
@@ -176,30 +178,61 @@ public class DocCommand implements BLauncherCmd {
             return;
         }
 
-        // load project
-        Project project;
-        BuildOptions buildOptions = constructBuildOptions();
-        try {
-            project = BuildProject.load(this.projectPath, buildOptions);
-        } catch (ProjectException e) {
-            CommandUtil.printError(this.errStream, e.getMessage(), null, false);
+        if (ProjectPaths.isWorkspaceRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is a workspace, please specify a package or a source file to run",
+                    null, true);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        } else if (!ProjectPaths.isPackageRoot(this.projectPath)) {
+            CommandUtil.printError(this.errStream,
+                    "the specified path is not a valid Ballerina package: "
+                            + this.projectPath.toAbsolutePath(), null, true);
             CommandUtil.exitError(this.exitWhenFinish);
             return;
         }
 
+        Optional<Path> workspaceRoot = ProjectPaths.findWorkspaceRoot(this.projectPath);
+        BuildOptions buildOptions = constructBuildOptions(workspaceRoot.isPresent());
+
+        Workspace workspace;
+        try {
+            workspace = workspaceRoot.map(path -> Workspace.load(path, buildOptions)).orElseGet(()
+                    -> Workspace.load(this.projectPath, buildOptions));
+        } catch (ProjectException e) {
+            CommandUtil.printError(this.errStream, "failed to load the workspace: " + e.getMessage(), null, false);
+            CommandUtil.exitError(this.exitWhenFinish);
+            return;
+        }
+
+        if (workspace.kind() == ProjectKind.WORKSPACE_PROJECT) {
+            if (targetDir != null) {
+                CommandUtil.printError(this.errStream,
+                        "'--target-dir' is not supported for workspaces", null, true);
+                CommandUtil.exitError(this.exitWhenFinish);
+                return;
+            }
+        }
+
         // normalize paths
-        this.projectPath = this.projectPath.normalize();
+        this.projectPath = this.projectPath.toAbsolutePath().normalize();
         this.outputPath = this.outputLoc != null ? Path.of(this.outputLoc).toAbsolutePath() : null;
 
+        if (!workspaceRoot.orElseThrow().equals(this.projectPath)) {
+            generateDocsForSpecificProject(workspace);
+        }
+    }
+
+    private void generateDocsForSpecificProject(Workspace workspace) {
         TaskExecutor taskExecutor = new TaskExecutor.TaskBuilder()
-                .addTask(new CreateTargetDirTask()) // create target directory.
-                .addTask(new RunBuildToolsTask(outStream)) // run build tools
-                .addTask(new ResolveMavenDependenciesTask(outStream)) // resolve maven dependencies in Ballerina.toml
-                .addTask(new CompileTask(outStream, errStream)) // compile the modules
-                .addTask(new CreateDocsTask(outStream, outputPath)) // creates API documentation
+                .addTask(new CleanTargetDirTask(this.projectPath)) // create target directory.
+                .addTask(new RunBuildToolsTask(outStream, this.projectPath)) // run build tools
+                .addTask(new ResolveMavenDependenciesTask(outStream, this.projectPath)) // resolve maven dependencies in Ballerina.toml
+                .addTask(new CompileTask(outStream, errStream, this.projectPath)) // compile the modules
+                .addTask(new CreateDocsTask(outStream, outputPath, this.projectPath)) // creates API documentation
                 .build();
 
-        taskExecutor.executeTasks(project);
+        taskExecutor.executeTasks(workspace);
         if (this.exitWhenFinish) {
             Runtime.getRuntime().exit(0);
         }
@@ -224,7 +257,7 @@ public class DocCommand implements BLauncherCmd {
     public void setParentCmdParser(CommandLine parentCmdParser) {
     }
 
-    private BuildOptions constructBuildOptions() {
+    private BuildOptions constructBuildOptions(boolean workspaceBuild) {
         BuildOptions.BuildOptionsBuilder buildOptionsBuilder = BuildOptions.builder();
 
         buildOptionsBuilder
@@ -237,7 +270,7 @@ public class DocCommand implements BLauncherCmd {
                 .setShowDependencyDiagnostics(showDependencyDiagnostics)
                 .setOptimizeDependencyCompilation(optimizeDependencyCompilation);
 
-        if (targetDir != null) {
+        if (targetDir != null && workspaceBuild) {
             buildOptionsBuilder.targetDir(targetDir.toString());
         }
 
