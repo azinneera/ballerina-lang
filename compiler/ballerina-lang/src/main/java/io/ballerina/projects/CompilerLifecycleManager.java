@@ -42,7 +42,8 @@ class CompilerLifecycleManager {
     private final LifecycleTasks lifecycleTasks;
 
     public CompilerLifecycleManager(PackageCompilation compilation, LifecycleTasks lifecycleTasks) {
-        this.currentPackage = compilation.packageContext().project().currentPackage();
+        this.currentPackage = compilation.packageContext().workspace()
+                .getPackage(compilation.packageContext().descriptor());
         this.compilation = compilation;
         this.lifecycleTasks = lifecycleTasks;
     }

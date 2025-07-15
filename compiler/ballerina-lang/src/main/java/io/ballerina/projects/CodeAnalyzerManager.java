@@ -45,7 +45,8 @@ class CodeAnalyzerManager {
 
     public CodeAnalyzerManager(PackageCompilation compilation, CodeAnalyzerTasks codeAnalyzerTasks) {
         // This is not the best way to get the current package, you may get a different version of the package tree
-        this.currentPackage = compilation.packageContext().project().currentPackage();
+        this.currentPackage = compilation.packageContext().workspace()
+                .getPackage(compilation.packageContext().descriptor());
         this.compilation = compilation;
         this.codeAnalyzerTasks = codeAnalyzerTasks;
     }

@@ -42,7 +42,8 @@ class CodeModifierManager {
 
     private CodeModifierManager(PackageCompilation compilation, CodeModifierTasks codeModifierTasks) {
         // This is not the best way to get the current package, you may get a different version of the package tree
-        this.currentPackage = compilation.packageContext().project().currentPackage();
+        this.currentPackage = compilation.packageContext().workspace()
+                .getPackage(compilation.packageContext().descriptor());
         this.compilation = compilation;
         this.codeModifierTasks = codeModifierTasks;
     }

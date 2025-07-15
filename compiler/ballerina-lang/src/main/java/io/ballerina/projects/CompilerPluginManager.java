@@ -58,7 +58,8 @@ class CompilerPluginManager {
         // TODO We need to update the DependencyGraph API. Right now it is a mess
         PackageResolution packageResolution = compilation.getResolution();
         ResolvedPackageDependency rootPkgNode = new ResolvedPackageDependency(
-                packageResolution.packageContext().project().currentPackage(), PackageDependencyScope.DEFAULT);
+                packageResolution.packageContext().workspace()
+                        .getPackage(packageResolution.packageContext().descriptor()), PackageDependencyScope.DEFAULT);
         DependencyGraph<ResolvedPackageDependency> dependencyGraph = packageResolution.dependencyGraph();
         List<Package> directDependencies = getDirectDependencies(rootPkgNode, dependencyGraph);
         List<CompilerPluginInfo> compilerPlugins = loadEngagedCompilerPlugins(directDependencies);
