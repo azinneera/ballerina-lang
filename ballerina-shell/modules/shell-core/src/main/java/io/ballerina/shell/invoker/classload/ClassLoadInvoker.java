@@ -28,8 +28,10 @@ import io.ballerina.compiler.syntax.tree.TypeDescriptorNode;
 import io.ballerina.projects.JBallerinaBackend;
 import io.ballerina.projects.JvmTarget;
 import io.ballerina.projects.ModuleId;
+import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.Workspace;
 import io.ballerina.shell.exceptions.InvokerException;
 import io.ballerina.shell.invoker.AvailableVariable;
 import io.ballerina.shell.invoker.ShellSnippetsInvoker;
@@ -127,7 +129,7 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
     private final Map<Identifier, ModuleMemberDeclarationSnippet> availableModuleDeclarations;
     private List<ExecutableSnippet> executableSnippets;
     private List<Identifier> variableNames;
-    private Project project;
+    private Workspace project;
     /**
      * Stores all the newly found variable names.
      *
@@ -172,12 +174,12 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
     @Override
     public void initialize() throws InvokerException {
         ClassLoadContext emptyContext = new ClassLoadContext(contextId, importsManager.getUsedImports(List.of()));
-        Project project = getProject(emptyContext, DECLARATION_TEMPLATE_FILE);
+        Workspace project = getProject(emptyContext, DECLARATION_TEMPLATE_FILE);
         PackageCompilation compilation = compile(project);
         // Remember all the visible var symbols
         // Also use this to cache ANY type symbol
         Identifier runFunctionName = new Identifier(MODULE_RUN_METHOD_NAME);
-        for (GlobalVariableSymbol symbol : globalVariableSymbols(project, compilation)) {
+        for (GlobalVariableSymbol symbol : globalVariableSymbols(project.packages().get(0), compilation)) {
             initialIdentifiers.add(symbol.getName());
             if (symbol.getName().equals(runFunctionName)) {
                 assert symbol.getTypeSymbol() instanceof FunctionTypeSymbol;
@@ -258,7 +260,7 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
             if (noModuleDeclarations && noVariableDeclarations) {
                 // Compile declaration template if there were declarations
                 ClassLoadContext execContext = createVariablesExecutionContext(List.of(), executableSnippets, Map.of());
-                Project project = getProject(execContext, EXECUTION_TEMPLATE_FILE);
+                Workspace project = getProject(execContext, EXECUTION_TEMPLATE_FILE);
                 compilation = compile(project);
             } else {
                 ClassLoadContext context = createDeclarationContext(variableDeclarations.keySet(), variableNames,
@@ -290,7 +292,8 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
             return Optional.ofNullable(InvokerMemory.recall(contextId, CONTEXT_EXPR_VAR_NAME));
         }
 
-        Collection<GlobalVariableSymbol> globalVariableSymbols = globalVariableSymbols(project, compilation.get());
+        Collection<GlobalVariableSymbol> globalVariableSymbols = globalVariableSymbols(
+                project.packages().get(0), compilation.get());
         Map<Identifier, GlobalVariable> allNewVariables = new HashMap<>();
         for (VariableDeclarationSnippet snippet : variableDeclarations.keySet()) {
             Map<Identifier, GlobalVariable> newVariables = createGlobalVariables(
@@ -404,7 +407,7 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
         Set<String> importStrings = getRequiredImportStatements();
         ClassLoadContext context = new ClassLoadContext(this.contextId, importStrings,
                 moduleDclns.values(), globalVariableContexts().values(), null, null);
-        Project project = getProject(context, DECLARATION_TEMPLATE_FILE);
+        Workspace project = getProject(context, DECLARATION_TEMPLATE_FILE);
         compile(project);
     }
 
@@ -548,13 +551,13 @@ public class ClassLoadInvoker extends ShellSnippetsInvoker {
      * Gets the symbols that are visible globally.
      * Returns only function symbols and variable symbols.
      *
-     * @param project     Project to get symbols.
+     * @param pkg     Package to get symbols.
      * @param compilation Compilation object.
      * @return All the visible symbols.
      */
-    private Collection<GlobalVariableSymbol> globalVariableSymbols(Project project, PackageCompilation compilation) {
+    private Collection<GlobalVariableSymbol> globalVariableSymbols(Package pkg, PackageCompilation compilation) {
         // Get the document associated with project
-        ModuleId moduleId = project.currentPackage().getDefaultModule().moduleId();
+        ModuleId moduleId = pkg.getDefaultModule().moduleId();
         return compilation.getSemanticModel(moduleId).moduleSymbols().stream()
                 .filter(s -> s instanceof VariableSymbol || s instanceof FunctionSymbol)
                 .map(GlobalVariableSymbol::fromSymbol)

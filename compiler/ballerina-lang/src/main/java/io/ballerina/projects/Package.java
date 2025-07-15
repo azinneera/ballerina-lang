@@ -434,7 +434,7 @@ public class Package {
         boolean offline = resolutionOptions.offline();
         boolean sticky = resolutionOptions.sticky();
         CompilationOptions newCompOptions = CompilationOptions.builder().setOffline(offline).setSticky(sticky).build();
-        newCompOptions = newCompOptions.acceptTheirs(project.currentPackage().compilationOptions());
+        newCompOptions = newCompOptions.acceptTheirs(workspace.getPackage(descriptor()).compilationOptions());
         return this.packageContext.getResolution(newCompOptions, true);
     }
 
@@ -466,6 +466,7 @@ public class Package {
         private DependencyManifest dependencyManifest;
         private final Map<ModuleId, ModuleContext> moduleContextMap;
         private final Project project;
+        private final Workspace workspace;
         private final DependencyGraph<ResolvedPackageDependency> dependencyGraph;
         private final CompilationOptions compilationOptions;
         private TomlDocumentContext ballerinaTomlContext;
@@ -483,6 +484,7 @@ public class Package {
             this.dependencyManifest = oldPackage.dependencyManifest();
             this.moduleContextMap = copyModules(oldPackage);
             this.project = oldPackage.project;
+            this.workspace = oldPackage.workspace;
             this.dependencyGraph = oldPackage.getResolution().dependencyGraph();
             this.compilationOptions = oldPackage.compilationOptions();
             this.ballerinaTomlContext = oldPackage.packageContext.ballerinaTomlContext().orElse(null);
@@ -491,8 +493,8 @@ public class Package {
             this.compilerPluginTomlContext = oldPackage.packageContext.compilerPluginTomlContext().orElse(null);
             this.balToolTomlContext = oldPackage.packageContext.balToolTomlContext().orElse(null);
             this.readmeMdContext = oldPackage.packageContext.readmeMdContext().orElse(null);
-            resourceContextMap = copyResources(oldPackage, oldPackage.packageContext.resourceIds());
-            testResourceContextMap = copyResources(oldPackage, oldPackage.packageContext.testResourceIds());
+            this.resourceContextMap = copyResources(oldPackage, oldPackage.packageContext.resourceIds());
+            this.testResourceContextMap = copyResources(oldPackage, oldPackage.packageContext.testResourceIds());
         }
 
         Modifier updateModules(Set<ModuleContext> newModuleContexts) {

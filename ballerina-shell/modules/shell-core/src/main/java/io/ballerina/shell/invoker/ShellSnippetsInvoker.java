@@ -32,6 +32,7 @@ import io.ballerina.projects.Module;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.directory.SingleFileProject;
 import io.ballerina.projects.util.ProjectUtils;
 import io.ballerina.runtime.api.values.BError;
@@ -216,7 +217,7 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
      * @return Created ballerina project.
      * @throws InvokerException If file writing failed.
      */
-    protected Project getProject(Object context, String templateFile) throws InvokerException {
+    protected Workspace getProject(Object context, String templateFile) throws InvokerException {
         Mustache template = getTemplate(templateFile);
         try (StringWriter stringWriter = new StringWriter()) {
             template.execute(stringWriter, context);
@@ -235,14 +236,14 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
      * @return Created ballerina project.
      * @throws InvokerException If file writing failed.
      */
-    protected Project getProject(String source, boolean isOffline) throws InvokerException {
+    protected Workspace getProject(String source, boolean isOffline) throws InvokerException {
         try {
             File mainBal = writeToFile(source);
             BuildOptions buildOptions = BuildOptions.builder()
                     .setOffline(isOffline)
                     .targetDir(ProjectUtils.getTemporaryTargetPath())
                     .build();
-            return SingleFileProject.load(mainBal.toPath(), buildOptions);
+            return Workspace.load(mainBal.toPath(), buildOptions);
         } catch (IOException e) {
             addErrorDiagnostic("File writing failed: " + e.getMessage());
             throw new InvokerException(e);
@@ -255,15 +256,16 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
      * Helper method to compile a project and report any errors.
      * No code generation is done.
      *
-     * @param project Project to compile.
+     * @param workspace Project to compile.
      * @return Compilation data.
      * @throws InvokerException If compilation failed.
      */
-    protected PackageCompilation compile(Project project) throws InvokerException {
+    protected PackageCompilation compile(Workspace workspace) throws InvokerException {
         boolean containErrors = false;
         try {
-            Module module = project.currentPackage().getDefaultModule();
-            PackageCompilation packageCompilation = project.currentPackage().getCompilation();
+            Package pkg = workspace.packages().get(0);
+            Module module = pkg.getDefaultModule();
+            PackageCompilation packageCompilation = pkg.getCompilation();
             DiagnosticResult diagnosticResult = packageCompilation.diagnosticResult();
 
             for (Diagnostic diagnostic : diagnosticResult.diagnostics()) {
@@ -336,10 +338,10 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
      * @throws InvokerException If execution/compilation failed.
      */
     protected void executeProject(ClassLoadContext context, String templateName) throws InvokerException {
-        Project project = getProject(context, templateName);
-        PackageCompilation compilation = compile(project);
+        Workspace workspace = getProject(context, templateName);
+        PackageCompilation compilation = compile(workspace);
         JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(compilation, JvmTarget.JAVA_21);
-        Package pkg = project.currentPackage();
+        Package pkg = workspace.packages().get(0);
         io.ballerina.runtime.api.Module module = new io.ballerina.runtime.api.Module(pkg
                 .packageOrg().value(), pkg.packageName().value(), pkg.packageVersion().toString());
         executeProject(jBallerinaBackend, module);

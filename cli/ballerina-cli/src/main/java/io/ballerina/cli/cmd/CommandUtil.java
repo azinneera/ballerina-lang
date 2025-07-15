@@ -34,6 +34,7 @@ import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.SemanticVersion;
 import io.ballerina.projects.Settings;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.internal.bala.BalToolJson;
 import io.ballerina.projects.internal.bala.BalaJson;
@@ -1215,7 +1216,7 @@ public final class CommandUtil {
 
         ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
         defaultBuilder.addCompilationCacheFactory(new FileSystemCache.FileSystemCacheFactory(cacheDir));
-        BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaPath, buildOptions);
+        Workspace workspace = Workspace.load(balaPath, defaultBuilder, buildOptions);
 
         // Delete package cache if available
         Path packageCacheDir = cacheDir.resolve(orgName).resolve(packageName).resolve(version);
@@ -1224,7 +1225,7 @@ public final class CommandUtil {
         }
 
         // getResolution pulls all dependencies of the pulled package
-        PackageCompilation packageCompilation = balaProject.currentPackage().getCompilation();
+        PackageCompilation packageCompilation = workspace.packages().get(0).getCompilation();
         Collection<Diagnostic> resolutionDiagnostics = packageCompilation.getResolution()
                 .diagnosticResult().diagnostics();
         if (!resolutionDiagnostics.isEmpty()) {
@@ -1233,7 +1234,7 @@ public final class CommandUtil {
         if (packageCompilation.getResolution().diagnosticResult().hasErrors()) {
             return true;
         }
-        if (!hasProvidedPlatformDeps(balaProject.currentPackage())) {
+        if (!hasProvidedPlatformDeps(workspace.packages().get(0))) {
             JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(packageCompilation, JvmTarget.JAVA_21);
             Collection<Diagnostic> backendDiagnostics = jBallerinaBackend.diagnosticResult().diagnostics(false);
             if (!backendDiagnostics.isEmpty()) {

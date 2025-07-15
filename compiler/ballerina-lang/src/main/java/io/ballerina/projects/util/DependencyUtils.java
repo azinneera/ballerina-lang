@@ -18,7 +18,10 @@
 package io.ballerina.projects.util;
 
 import io.ballerina.projects.CompilationOptions;
+import io.ballerina.projects.Package;
+import io.ballerina.projects.PackageDescriptor;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.Workspace;
 
 /**
  * Project dependencies related util methods.
@@ -36,9 +39,23 @@ public final class DependencyUtils {
      *
      * @param project project
      */
+    @Deprecated
     public static void pullMissingDependencies(Project project) {
         CompilationOptions.CompilationOptionsBuilder compilationOptionsBuilder = CompilationOptions.builder();
         compilationOptionsBuilder.setOffline(false).setSticky(false);
         project.currentPackage().getResolution(compilationOptionsBuilder.build());
+    }
+
+    /**
+     * Pull missing dependencies from central.
+     *
+     * @param workspace workspace
+     * @param descriptor package descriptor
+     */
+    @Deprecated
+    public static void pullMissingDependencies(Workspace workspace, PackageDescriptor descriptor) {
+        CompilationOptions.CompilationOptionsBuilder compilationOptionsBuilder = CompilationOptions.builder();
+        compilationOptionsBuilder.setOffline(false).setSticky(false);
+        workspace.getPackage(descriptor).getResolution(compilationOptionsBuilder.build());
     }
 }
