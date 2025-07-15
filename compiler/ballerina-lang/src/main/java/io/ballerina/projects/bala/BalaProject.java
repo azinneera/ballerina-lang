@@ -41,10 +41,12 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 /**
+ * @deprecated use {@link Workspace} instead.
  * {@code BalaProject} represents a Ballerina project instance created from a bala.
  *
  * @since 2.0.0
  */
+@Deprecated
 public class BalaProject extends Project {
     private final String platform;
     private final String balaVersion;
@@ -59,10 +61,20 @@ public class BalaProject extends Project {
         return loadProject(environmentBuilder, balaPath, BuildOptions.builder().setSticky(true).build());
     }
 
+    public static BalaProject loadProject(Path balaPath) {
+        return loadProject(balaPath, BuildOptions.builder().setSticky(true).build());
+    }
+
+    public static BalaProject loadProject(Path balaPath, BuildOptions buildOptions) {
+        ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
+        environmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
+        return loadProject(environmentBuilder, balaPath, buildOptions);
+    }
+    
     public static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath,
                                           BuildOptions buildOptions) {
         Workspace workspace = Workspace.load(balaPath, environmentBuilder, buildOptions);
-        return (BalaProject) workspace.packages().get(0).project();
+        return (BalaProject) workspace.packages().iterator().next().project();
     }
 
     public static BalaProject loadProject(Workspace workspace, ProjectEnvironmentBuilder environmentBuilder,

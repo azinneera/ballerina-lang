@@ -136,11 +136,10 @@ public class DocCommand implements BLauncherCmd {
             if (argList.get(0).endsWith(".bala")) {
                 this.projectPath = Path.of(System.getProperty("user.dir"));
                 Path balaPath = this.projectPath.resolve(argList.get(0));
-                ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-                defaultBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-                BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaPath);
+                Workspace workspace = Workspace.load(balaPath);
                 try {
-                    BallerinaDocGenerator.generateAPIDocs(balaProject, this.projectPath.toString(), false);
+                    BallerinaDocGenerator.generateAPIDocs(
+                            workspace.packages().iterator().next(), this.projectPath.toString(), false);
                 } catch (IOException e) {
                     CommandUtil.printError(this.errStream, e.getMessage(), null, false);
                     CommandUtil.exitError(this.exitWhenFinish);

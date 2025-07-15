@@ -74,6 +74,18 @@ public class Workspace {
      *
      * @param workspaceRoot The root directory of the workspace
      */
+    private Workspace(Path workspaceRoot, TomlDocument tomlDocument, BuildOptions buildOptions,
+                      ProjectEnvironmentBuilder environmentBuilder) {
+        this.workspaceRoot = workspaceRoot;
+        this.workspaceBallerinaToml = WorkspaceBallerinaToml.from(tomlDocument, this);
+        this.buildOptions = buildOptions;
+        this.workspaceManifest = WorkspaceManifestBuilder.from(tomlDocument, workspaceRoot).manifest();
+        this.projectSet = new HashSet<>();
+        loadProjects(environmentBuilder);
+        this.dependencyGraph = buildDependencyGraph();
+        this.toolContextMap = new HashMap<>();
+    }
+
     private Workspace(Path workspaceRoot, TomlDocument tomlDocument, BuildOptions buildOptions) {
         this.workspaceRoot = workspaceRoot;
         this.workspaceBallerinaToml = WorkspaceBallerinaToml.from(tomlDocument, this);
@@ -149,7 +161,14 @@ public class Workspace {
         }
 
         if (ProjectPaths.isWorkspaceRoot(path)) {
-            throw new UnsupportedOperationException("Multi-package workspaces are not supported with this API");
+            try {
+                TomlDocument tomlDocument = TomlDocument.from(BALLERINA_TOML,
+                        Files.readString(path.resolve(BALLERINA_TOML)));
+                return new Workspace(path, tomlDocument, buildOptions, environmentBuilder);
+            } catch (IOException e) {
+                throw new ProjectException("Error reading " + BALLERINA_TOML + " file in workspace: "
+                        + path.toAbsolutePath(), e);
+            }
         }
 
         if (ProjectPaths.isPackageRoot(path)) {
@@ -360,6 +379,17 @@ public class Workspace {
         }
     }
 
+    private void loadProjects(ProjectEnvironmentBuilder environmentBuilder) {
+        for (Path packagePath : this.workspaceManifest.packages()) {
+            Path ballerinaTomlPath = packagePath.resolve(BALLERINA_TOML);
+            if (Files.exists(ballerinaTomlPath)) {
+                Project project = loadProject(packagePath, this.buildOptions, ProjectKind.WORKSPACE_PROJECT,
+                        environmentBuilder);
+                this.projectSet.add(project);
+            }
+        }
+    }
+
     private Project loadProject(Path packagePath, BuildOptions buildOptions,
                                 ProjectKind projectKind, ProjectEnvironmentBuilder environmentBuilder) {
         if (projectKind.equals(ProjectKind.SINGLE_FILE_PROJECT)) {
@@ -556,6 +586,18 @@ public class Workspace {
         }
         this.projectSet.add(project);
         this.dependencyGraph = null; // Reset the dependency graph
+    }
+
+    /**
+     * Returns the platform of the project.
+     *
+     * @return An Optional containing the platform string if the project is a BALA project, otherwise empty
+     */
+    public Optional<String> platform() {
+        if (kind() == ProjectKind.BALA_PROJECT) {
+            return Optional.of(((BalaProject) this.projectSet.iterator().next()).platform());
+        }
+        return Optional.empty();
     }
 
     void resetDependencyGraph() {

@@ -28,7 +28,9 @@ import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
+import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.Settings;
+import io.ballerina.projects.Workspace;
 import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.internal.model.Proxy;
@@ -356,18 +358,19 @@ public class PushCommand implements BLauncherCmd {
     }
 
     private static void validateReadmeAndBalToml(Path balaPath) {
-        ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-        defaultBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-        BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaPath);
+        Workspace workspace = Workspace.load(balaPath);
+        if (workspace.kind() != ProjectKind.BALA_PROJECT) {
+            throw new ProjectException("the provided package is not a valid BALA: " + balaPath);
+        }
 
         try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(balaPath, StandardOpenOption.READ))) {
             ZipEntry entry;
             String readme;
             while ((entry = zip.getNextEntry()) != null) {
-                if (balaProject.currentPackage().manifest().readme() == null) {
+                if (workspace.packages().iterator().next().manifest().readme() == null) {
                     readme = ProjectConstants.BALA_DOCS_DIR + "/" + ProjectConstants.PACKAGE_MD_FILE_NAME;
                 } else {
-                    readme = balaProject.currentPackage().manifest().readme();
+                    readme = workspace.packages().iterator().next().manifest().readme();
                 }
                 if (entry.getName().equals(readme)) {
                     if (entry.getSize() == 0) {
@@ -383,17 +386,17 @@ public class PushCommand implements BLauncherCmd {
     }
 
     private void pushBalaToCustomRepo(Path balaFilePath) {
-        ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-        defaultBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-        BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaFilePath);
-
+        Workspace workspace = Workspace.load(balaFilePath);
+        if (workspace.kind() != ProjectKind.BALA_PROJECT) {
+            throw new ProjectException("the provided package is not a valid BALA: " + balaFilePath);
+        }
         Path repoPath = RepoUtils.createAndGetHomeReposPath()
                 .resolve(ProjectConstants.REPOSITORIES_DIR)
                 .resolve(ProjectConstants.LOCAL_REPOSITORY_NAME);
-        String org = balaProject.currentPackage().packageOrg().value();
-        String packageName = balaProject.currentPackage().packageName().value();
-        String version = balaProject.currentPackage().packageVersion().toString();
-        String platform = balaProject.platform();
+        String org = workspace.packages().iterator().next().packageOrg().value();
+        String packageName = workspace.packages().iterator().next().packageName().value();
+        String version = workspace.packages().iterator().next().packageVersion().toString();
+        String platform = workspace.platform().orElseThrow();
         String ballerinaShortVersion = RepoUtils.getBallerinaShortVersion();
 
         Path balaDestPath = repoPath.resolve(ProjectConstants.BALA_DIR_NAME)
@@ -480,13 +483,13 @@ public class PushCommand implements BLauncherCmd {
     private void pushBalaToRemote(Path balaPath, CentralAPIClient client) {
         Path balaFileName = balaPath.getFileName();
         if (null != balaFileName) {
-            ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-            defaultBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-            BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaPath);
-
-            String org = balaProject.currentPackage().manifest().org().toString();
-            String name = balaProject.currentPackage().manifest().name().toString();
-            String version = balaProject.currentPackage().manifest().version().toString();
+            Workspace workspace = Workspace.load(balaPath);
+            if (workspace.kind() != ProjectKind.BALA_PROJECT) {
+                throw new ProjectException("the provided package is not a valid BALA: " + balaPath);
+            }
+            String org = workspace.packages().iterator().next().manifest().org().toString();
+            String name = workspace.packages().iterator().next().manifest().name().toString();
+            String version = workspace.packages().iterator().next().manifest().version().toString();
 
             Path ballerinaHomePath = RepoUtils.createAndGetHomeReposPath();
             Path settingsTomlFilePath = ballerinaHomePath.resolve(SETTINGS_FILE_NAME);
@@ -519,13 +522,14 @@ public class PushCommand implements BLauncherCmd {
     private void pushBalaToCustomRepo(Path balaPath, MavenResolverClient client) {
         Path balaFileName = balaPath.getFileName();
         if (null != balaFileName) {
-            ProjectEnvironmentBuilder defaultBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-            defaultBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-            BalaProject balaProject = BalaProject.loadProject(defaultBuilder, balaPath);
+            Workspace workspace = Workspace.load(balaPath);
+            if (workspace.kind() != ProjectKind.BALA_PROJECT) {
+                throw new ProjectException("the provided package is not a valid BALA: " + balaPath);
+            }
 
-            String org = balaProject.currentPackage().manifest().org().toString();
-            String name = balaProject.currentPackage().manifest().name().toString();
-            String version = balaProject.currentPackage().manifest().version().toString();
+            String org = workspace.packages().iterator().next().manifest().org().toString();
+            String name = workspace.packages().iterator().next().manifest().name().toString();
+            String version =workspace.packages().iterator().next().manifest().version().toString();
 
             try {
                 Path customRepoPath = Files.createTempDirectory("ballerina-" + System.nanoTime());

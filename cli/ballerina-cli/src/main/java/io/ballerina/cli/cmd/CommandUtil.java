@@ -1225,7 +1225,7 @@ public final class CommandUtil {
         }
 
         // getResolution pulls all dependencies of the pulled package
-        PackageCompilation packageCompilation = workspace.packages().get(0).getCompilation();
+        PackageCompilation packageCompilation = workspace.packages().iterator().next().getCompilation();
         Collection<Diagnostic> resolutionDiagnostics = packageCompilation.getResolution()
                 .diagnosticResult().diagnostics();
         if (!resolutionDiagnostics.isEmpty()) {
@@ -1234,7 +1234,7 @@ public final class CommandUtil {
         if (packageCompilation.getResolution().diagnosticResult().hasErrors()) {
             return true;
         }
-        if (!hasProvidedPlatformDeps(workspace.packages().get(0))) {
+        if (!hasProvidedPlatformDeps(workspace.packages().iterator().next())) {
             JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(packageCompilation, JvmTarget.JAVA_21);
             Collection<Diagnostic> backendDiagnostics = jBallerinaBackend.diagnosticResult().diagnostics(false);
             if (!backendDiagnostics.isEmpty()) {

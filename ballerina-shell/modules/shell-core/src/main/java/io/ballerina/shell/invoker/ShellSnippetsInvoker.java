@@ -263,7 +263,7 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
     protected PackageCompilation compile(Workspace workspace) throws InvokerException {
         boolean containErrors = false;
         try {
-            Package pkg = workspace.packages().get(0);
+            Package pkg = workspace.packages().iterator().next();
             Module module = pkg.getDefaultModule();
             PackageCompilation packageCompilation = pkg.getCompilation();
             DiagnosticResult diagnosticResult = packageCompilation.diagnosticResult();
@@ -341,7 +341,7 @@ public abstract class ShellSnippetsInvoker extends DiagnosticReporter {
         Workspace workspace = getProject(context, templateName);
         PackageCompilation compilation = compile(workspace);
         JBallerinaBackend jBallerinaBackend = JBallerinaBackend.from(compilation, JvmTarget.JAVA_21);
-        Package pkg = workspace.packages().get(0);
+        Package pkg = workspace.packages().iterator().next();
         io.ballerina.runtime.api.Module module = new io.ballerina.runtime.api.Module(pkg
                 .packageOrg().value(), pkg.packageName().value(), pkg.packageVersion().toString());
         executeProject(jBallerinaBackend, module);

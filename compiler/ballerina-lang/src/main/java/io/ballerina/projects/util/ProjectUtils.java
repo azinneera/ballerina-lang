@@ -1430,7 +1430,7 @@ public final class ProjectUtils {
     }
 
     public static String getBalaVersion(Workspace workspace) {
-        return ((BalaProject) workspace.packages().get(0).project()).balaVersion();
+        return ((BalaProject) workspace.packages().iterator().next().project()).balaVersion();
     }
 
     /**

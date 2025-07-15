@@ -63,7 +63,7 @@ public class SingleFileProject extends Project {
     public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder, Path filePath,
                                          BuildOptions buildOptions) {
         Workspace workspace = Workspace.load(filePath, environmentBuilder, buildOptions);
-        return (SingleFileProject) workspace.packages().get(0).project();
+        return (SingleFileProject) workspace.packages().iterator().next().project();
     }
 
     public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder,

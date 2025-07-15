@@ -110,7 +110,7 @@ public class FileSystemRepository extends AbstractPackageRepository {
         environmentBuilder = environmentBuilder.addCompilationCacheFactory(
                 new FileSystemCache.FileSystemCacheFactory(cacheDir));
         Workspace workspace = Workspace.load(balaPath, environmentBuilder);
-        return Optional.of(workspace.packages().get(0));
+        return Optional.of(workspace.packages().iterator().next());
     }
 
     /**

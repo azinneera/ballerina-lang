@@ -129,7 +129,7 @@ public class BuildProject extends Project implements Comparable<BuildProject> {
     public static BuildProject load(ProjectEnvironmentBuilder environmentBuilder, Path projectPath,
                                     BuildOptions buildOptions) {
         Workspace workspace = Workspace.load(projectPath, environmentBuilder, buildOptions);
-        return (BuildProject) workspace.packages().get(0).project();
+        return (BuildProject) workspace.packages().iterator().next().project();
     }
 
     /**

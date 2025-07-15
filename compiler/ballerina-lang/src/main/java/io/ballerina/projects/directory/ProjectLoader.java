@@ -41,14 +41,17 @@ public final class ProjectLoader {
     private ProjectLoader() {
     }
 
+    @Deprecated
     public static Project loadProject(Path path) {
         return loadProject(path, ProjectEnvironmentBuilder.getDefaultBuilder(), BuildOptions.builder().build());
     }
 
+    @Deprecated
     public static Project loadProject(Path path, BuildOptions buildOptions) {
         return loadProject(path, ProjectEnvironmentBuilder.getDefaultBuilder(), buildOptions);
     }
 
+    @Deprecated
     public static Project loadProject(Path path, ProjectEnvironmentBuilder projectEnvironmentBuilder) {
         return loadProject(path, projectEnvironmentBuilder, BuildOptions.builder().build());
     }
@@ -60,6 +63,7 @@ public final class ProjectLoader {
      * @return Project instance
      * @throws ProjectException if an invalid path is provided
      */
+    @Deprecated
     public static Project loadProject(Path path, ProjectEnvironmentBuilder projectEnvironmentBuilder,
                                       BuildOptions buildOptions) throws ProjectException {
         Path absFilePath = Optional.of(path.toAbsolutePath()).get();
@@ -84,8 +88,7 @@ public final class ProjectLoader {
             if (Files.exists(projectRoot.resolve(ProjectConstants.BALLERINA_TOML))) {
                 return BuildProject.load(projectEnvironmentBuilder, projectRoot, buildOptions);
             } else if (Files.exists(projectRoot.resolve(ProjectConstants.PACKAGE_JSON))) {
-                projectEnvironmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-                return BalaProject.loadProject(projectEnvironmentBuilder, projectRoot, buildOptions);
+                return BalaProject.loadProject(projectRoot, buildOptions);
             } else {
                 throw new ProjectException("provided directory does not belong to any supported project types");
             }
@@ -112,7 +115,40 @@ public final class ProjectLoader {
         }
     }
 
+    /**
+     * Returns a workspace by deriving the type from the path provided.
+     *
+     * @param path path of a .bal file, project root, or a .bala file
+     * @return Workspace instance
+     * @throws ProjectException if an invalid path is provided
+     */
+    public static Workspace loadWorkspace(Path path) {
+        return loadWorkspace(path, BuildOptions.builder().build());
+    }
+
+    /**
+     * Returns a workspace by deriving the type from the path provided.
+     *
+     * @param path path of a .bal file, project root, or a .bala file
+     * @param buildOptions Build options
+     * @return Workspace instance
+     * @throws ProjectException if an invalid path is provided
+     */
     public static Workspace loadWorkspace(Path path, BuildOptions buildOptions) throws ProjectException {
+        return loadWorkspace(path, ProjectEnvironmentBuilder.getDefaultBuilder(), buildOptions);
+    }
+
+    /**
+     * Returns a workspace by deriving the type from the path provided.
+     *
+     * @param path path of a .bal file, project root, or a .bala file
+     * @param projectEnvironmentBuilder Project environment builder
+     * @param buildOptions Build options
+     * @return Workspace instance
+     * @throws ProjectException if an invalid path is provided
+     */
+    public static Workspace loadWorkspace(Path path, ProjectEnvironmentBuilder projectEnvironmentBuilder,
+                                          BuildOptions buildOptions) throws ProjectException {
         Path absFilePath = Optional.of(path.toAbsolutePath()).get();
         Path projectRoot;
         if (!Files.exists(path)) {
@@ -146,12 +182,6 @@ public final class ProjectLoader {
         } else {
             projectRoot = absFilePath;
         }
-        if (ProjectPaths.isBalaRoot(projectRoot)) {
-            ProjectEnvironmentBuilder projectEnvironmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-            projectEnvironmentBuilder.addCompilationCacheFactory(TempDirCompilationCache::from);
-            // For bala projects, we need to provide the project environment builder with a temporary cache
-            return Workspace.load(projectRoot, projectEnvironmentBuilder, buildOptions);
-        }
-        return Workspace.load(projectRoot, buildOptions);
+        return Workspace.load(projectRoot, projectEnvironmentBuilder, buildOptions);
     }
 }
