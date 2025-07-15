@@ -75,6 +75,10 @@ public class ModuleDescriptor implements Comparable<ModuleDescriptor> {
         return moduleCompilationId;
     }
 
+    PackageDescriptor packageDescriptor() {
+        return packageDesc;
+    }
+
     public PackageID moduleTestCompilationId() {
         return moduleTestCompilationId;
     }

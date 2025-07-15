@@ -86,12 +86,13 @@ public class Module {
 
     @Deprecated(since = "2201.10.0", forRemoval = true)
     public Collection<DocumentId> resourceIds() {
-        return this.moduleContext.project().currentPackage().resourceIds();
+        return this.moduleContext.workspace().getPackage(descriptor().packageDescriptor()).resourceIds();
     }
 
     @Deprecated(since = "2201.10.0", forRemoval = true)
     public Collection<DocumentId> testResourceIds() {
-        return this.moduleContext.project().currentPackage().getDefaultModule().testResourceIds();
+        return this.moduleContext.workspace().getPackage(descriptor().packageDescriptor())
+                .getDefaultModule().testResourceIds();
     }
 
     public Document document(DocumentId documentId) {
@@ -124,6 +125,10 @@ public class Module {
 
     public Project project() {
         return this.moduleContext.project();
+    }
+
+    public Workspace workspace() {
+        return this.moduleContext.workspace();
     }
 
     /** Returns an instance of the Module.Modifier.
@@ -195,6 +200,7 @@ public class Module {
         private final Package packageInstance;
         private final Project project;
         private MdDocumentContext moduleMdContext;
+        private final Workspace workspace;
 
         private Modifier(Module oldModule) {
             moduleId = oldModule.moduleId();
@@ -206,6 +212,7 @@ public class Module {
             packageInstance = oldModule.packageInstance;
             project = oldModule.project();
             moduleMdContext = oldModule.moduleContext.readmeMdContext().orElse(null);
+            workspace = oldModule.workspace();
         }
 
         Modifier updateDocument(DocumentContext newDocContext) {
@@ -350,7 +357,8 @@ public class Module {
 
         private Collection<ModuleDescriptor> getAllDependants(ModuleDescriptor updatedModuleDescriptor) {
             CompilationOptions offlineCompOptions = CompilationOptions.builder().setOffline(true).build();
-            offlineCompOptions = offlineCompOptions.acceptTheirs(project.currentPackage().compilationOptions());
+            Package pkg = workspace.getPackage(updatedModuleDescriptor.packageDescriptor());
+            offlineCompOptions = offlineCompOptions.acceptTheirs(pkg.compilationOptions());
             // this will build the dependency graph if it is not built yet
             packageInstance.packageContext().getResolution(offlineCompOptions, true);
             return getAllDependants(updatedModuleDescriptor, new HashSet<>(), new HashSet<>());
@@ -362,14 +370,14 @@ public class Module {
                 HashSet<ModuleDescriptor> dependants) {
             if (!visited.contains(updatedModuleDescriptor)) {
                 visited.add(updatedModuleDescriptor);
-                Collection<ModuleDescriptor> directDependents = this.project.currentPackage()
-                        .moduleDependencyGraph().getDirectDependents(updatedModuleDescriptor);
+                Collection<ModuleDescriptor> directDependents = workspace.getPackage(
+                        updatedModuleDescriptor.packageDescriptor()).moduleDependencyGraph()
+                        .getDirectDependents(updatedModuleDescriptor);
                 if (!directDependents.isEmpty()) {
                     dependants.addAll(directDependents);
                     for (ModuleDescriptor directDependent : directDependents) {
                         getAllDependants(directDependent, visited, dependants);
                     }
-
                 }
             }
 

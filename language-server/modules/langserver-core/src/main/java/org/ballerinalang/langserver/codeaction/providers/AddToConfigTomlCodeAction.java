@@ -86,11 +86,10 @@ public class AddToConfigTomlCodeAction implements RangeBasedCodeActionProvider {
             return Collections.emptyList();
         }
         Module module = context.currentModule().get();
-        Project project = module.project();
-        if (project.kind() == ProjectKind.SINGLE_FILE_PROJECT) {
+        if (module.workspace().kind() == ProjectKind.SINGLE_FILE_PROJECT) {
             return Collections.emptyList();
         }
-        String orgName = project.currentPackage().packageOrg().value();
+        String orgName = module.descriptor().org().value();
         SemanticModel semanticModel = context.currentSemanticModel().get();
         Types types = semanticModel.types();
         TypeBuilder builder = types.builder();

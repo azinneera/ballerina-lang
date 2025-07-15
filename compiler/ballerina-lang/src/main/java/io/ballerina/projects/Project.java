@@ -36,6 +36,7 @@ import static org.ballerinalang.compiler.CompilerOptionName.PROJECT_DIR;
  *
  * @since 2.0.0
  */
+@Deprecated
 public abstract class Project {
     protected final Path sourceRoot;
     private Package currentPackage;
@@ -112,8 +113,8 @@ public abstract class Project {
         return buildOptions;
     }
 
-    public Optional<Workspace> workspace() {
-        return Optional.ofNullable(workspace);
+    public Workspace workspace() {
+        return workspace;
     }
 
     /**

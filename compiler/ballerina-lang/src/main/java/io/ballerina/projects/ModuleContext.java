@@ -80,7 +80,7 @@ class ModuleContext {
     private final MdDocumentContext readmeMdContext;
     private final Map<DocumentId, DocumentContext> testDocContextMap;
     private Project project;
-    private Workspace workspace;
+    private final Workspace workspace;
     private final CompilationCache compilationCache;
     private final List<ModuleDescriptor> moduleDescDependencies;
 
@@ -102,6 +102,7 @@ class ModuleContext {
                   MdDocumentContext readmeMd,
                   List<ModuleDescriptor> moduleDescDependencies) {
         this.project = project;
+        this.workspace = project.workspace();
         this.moduleId = moduleId;
         this.moduleDescriptor = moduleDescriptor;
         this.isDefaultModule = isDefaultModule;
@@ -111,7 +112,6 @@ class ModuleContext {
         this.testSrcDocIds = Collections.unmodifiableCollection(testDocContextMap.keySet());
         this.readmeMdContext = readmeMd;
         this.moduleDescDependencies = Collections.unmodifiableList(moduleDescDependencies);
-
 
         ProjectEnvironment projectEnvironment = project.projectEnvironmentContext();
         this.bootstrap = new Bootstrap(projectEnvironment.getService(PackageResolver.class));
@@ -212,8 +212,13 @@ class ModuleContext {
         return this.project;
     }
 
+    Workspace workspace() {
+        return this.workspace;
+    }
+
     boolean isExported() {
-        List<String> exports = this.project.currentPackage().manifest().exportedModules();
+        List<String> exports = this.workspace.getPackage(
+                moduleDescriptor.packageDescriptor()).manifest().exportedModules();
         return exports.contains(moduleDescriptor.name().toString());
     }
 
