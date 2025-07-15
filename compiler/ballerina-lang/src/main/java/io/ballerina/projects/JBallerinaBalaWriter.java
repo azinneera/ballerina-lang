@@ -72,9 +72,11 @@ public class JBallerinaBalaWriter extends BalaWriter {
     protected Optional<JsonArray> addPlatformLibs(ZipOutputStream balaOutputStream)
             throws IOException {
         // retrieve platform dependencies
-        Collection<PlatformLibrary> jars = backend.platformLibraryDependencies(packageContext.packageId(),
+        PackageId packageId = packageContext.workspace()
+                .getPackage(packageContext.descriptor()).packageId();
+        Collection<PlatformLibrary> jars = backend.platformLibraryDependencies(packageId,
                 PlatformLibraryScope.DEFAULT);
-        Collection<PlatformLibrary> providedJars = backend.platformLibraryDependencies(packageContext.packageId(),
+        Collection<PlatformLibrary> providedJars = backend.platformLibraryDependencies(packageId,
                 PlatformLibraryScope.PROVIDED);
         if (jars.isEmpty() && providedJars.isEmpty()) {
             return Optional.empty();
@@ -236,7 +238,8 @@ public class JBallerinaBalaWriter extends BalaWriter {
      */
     private CompilerBackend.TargetPlatform getTargetPlatform(PackageResolution pkgResolution) {
         ResolvedPackageDependency resolvedPackageDependency = new ResolvedPackageDependency(
-                this.packageContext.project().currentPackage(), PackageDependencyScope.DEFAULT);
+                this.packageContext.workspace().getPackage(packageContext.descriptor()),
+                PackageDependencyScope.DEFAULT);
         Collection<ResolvedPackageDependency> resolvedPackageDependencies = pkgResolution.dependencyGraph()
                 .getDirectDependencies(resolvedPackageDependency);
 
@@ -250,7 +253,7 @@ public class JBallerinaBalaWriter extends BalaWriter {
         }
 
         // 2) Check package has defined any platform dependency
-        PackageManifest manifest = this.packageContext.project().currentPackage().manifest();
+        PackageManifest manifest = this.packageContext.workspace().getPackage(packageContext.descriptor()).manifest();
         if (hasPlatformDependencies(manifest.platforms())) {
             return this.backend.targetPlatform();
         }
@@ -272,8 +275,8 @@ public class JBallerinaBalaWriter extends BalaWriter {
     }
 
     private Optional<CompilerPluginDescriptor> readCompilerPluginToml() {
-        Optional<CompilerPluginToml> compilerPluginToml = backend.packageContext().project()
-                .currentPackage().compilerPluginToml();
+        Optional<CompilerPluginToml> compilerPluginToml = backend.packageContext().workspace()
+                .getPackage(packageContext.descriptor()).compilerPluginToml();
 
         if (compilerPluginToml.isPresent()) {
             TomlDocument tomlDocument = compilerPluginToml.get().compilerPluginTomlContext().tomlDocument();
@@ -283,8 +286,8 @@ public class JBallerinaBalaWriter extends BalaWriter {
     }
 
     private Optional<BalToolDescriptor> readBalToolToml() {
-        Optional<BalToolToml> balToolToml = backend.packageContext().project()
-                .currentPackage().balToolToml();
+        Optional<BalToolToml> balToolToml = backend.packageContext().workspace()
+                .getPackage(packageContext.descriptor()).balToolToml();
         if (balToolToml.isPresent()) {
             TomlDocument tomlDocument = balToolToml.get().balToolTomlContext().tomlDocument();
             Path sourceRoot = packageContext.project().sourceRoot();

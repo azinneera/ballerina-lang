@@ -381,7 +381,7 @@ public class JBallerinaBackend extends CompilerBackend {
         } catch (IOException e) {
             throw new ProjectException("Failed to cache generated jar, module: " + moduleContext.moduleName());
         }
-        if (moduleContext.project().currentPackage().packageContext() == packageContext &&
+        if (moduleContext.workspace().getPackage(packageContext.descriptor()).packageContext() == packageContext &&
                 moduleContext.isDefaultModule()) {
             cacheResources(compilationCache, moduleContext.project().buildOptions().skipTests());
         }
@@ -713,7 +713,7 @@ public class JBallerinaBackend extends CompilerBackend {
                     "-o " + executableFilePath.getParent() + "/" + nativeImageName,
                     "--no-fallback"));
         } else {
-            nativeImageName = project.currentPackage().packageName().toString();
+            nativeImageName = packageContext.packageName().toString();
             nativeArgs.addAll(Arrays.asList(graalVMBuildOptions, "-jar",
                     executableFilePath.toString(),
                     "-o " + executableFilePath.getParent() + "/" + nativeImageName,

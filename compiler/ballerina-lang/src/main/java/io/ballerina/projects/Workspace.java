@@ -147,12 +147,7 @@ public class Workspace {
                 return new Workspace(path, ProjectKind.SINGLE_FILE_PROJECT, buildOptions, environmentBuilder);
             }
         }
-//        // Validate the presence of BalWorkspace.toml
-//        Path workspaceConfig = path.resolve(BALLERINA_TOML);
-//        if (Files.notExists(workspaceConfig)) {
-//            throw new ProjectException("Provided path is not a valid Ballerina project: "
-//                    + path.toAbsolutePath() + ". Missing '" + BALLERINA_TOML + "' file.");
-//        }
+
         if (ProjectPaths.isWorkspaceRoot(path)) {
             throw new UnsupportedOperationException("Multi-package workspaces are not supported with this API");
         }

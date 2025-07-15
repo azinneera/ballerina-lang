@@ -322,7 +322,7 @@ public abstract class BalaWriter {
     private void addPackageSource(ZipOutputStream balaOutputStream) throws IOException {
         // add module sources
         for (ModuleId moduleId : this.packageContext.moduleIds()) {
-            Module module = this.packageContext.project().currentPackage().module(moduleId);
+            Module module = this.packageContext.workspace().getPackage(packageContext.descriptor()).module(moduleId);
 
             // Generate empty bal file for default module in tools
             if (module.isDefaultModule() && packageContext.balToolTomlContext().isPresent() &&
@@ -416,7 +416,7 @@ public abstract class BalaWriter {
         List<Dependency> packageDependencyGraph = getPackageDependencies(
                 this.packageContext.getResolution().dependencyGraph());
         List<ModuleDependency> moduleDependencyGraph = getModuleDependencies(
-                this.packageContext.project().currentPackage(), packageCache);
+                this.packageContext.workspace().getPackage(packageContext.descriptor()), packageCache);
 
         DependencyGraphJson depGraphJson = new DependencyGraphJson(packageDependencyGraph, moduleDependencyGraph);
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
