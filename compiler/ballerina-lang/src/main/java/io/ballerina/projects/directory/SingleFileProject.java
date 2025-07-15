@@ -52,26 +52,18 @@ public class SingleFileProject extends Project {
         return load(environmentBuilder, filePath, buildOptionsBuilder.build());
     }
 
-    public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder, Path filePath,
-                                         BuildOptions buildOptions) {
-        PackageConfig packageConfig = PackageConfigCreator.createSingleFileProjectConfig(filePath);
-        SingleFileProject singleFileProject = new SingleFileProject(null, environmentBuilder, filePath, buildOptions);
-        singleFileProject.addPackage(packageConfig);
-        return singleFileProject;
-    }
-
     public static SingleFileProject load(Path filePath) {
         return load(filePath, BuildOptions.builder().build());
     }
 
     public static SingleFileProject load(Path filePath, BuildOptions buildOptions) {
-        PackageConfig packageConfig = PackageConfigCreator.createSingleFileProjectConfig(filePath,
-                buildOptions.disableSyntaxTree());
-        ProjectEnvironmentBuilder environmentBuilder = ProjectEnvironmentBuilder.getDefaultBuilder();
-        SingleFileProject singleFileProject = new SingleFileProject(null, environmentBuilder, filePath,
-                buildOptions);
-        singleFileProject.addPackage(packageConfig);
-        return singleFileProject;
+        return load(ProjectEnvironmentBuilder.getDefaultBuilder(), filePath, buildOptions);
+    }
+
+    public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder, Path filePath,
+                                         BuildOptions buildOptions) {
+        Workspace workspace = Workspace.load(filePath, environmentBuilder, buildOptions);
+        return (SingleFileProject) workspace.packages().get(0).project();
     }
 
     public static SingleFileProject load(ProjectEnvironmentBuilder environmentBuilder,
@@ -87,13 +79,11 @@ public class SingleFileProject extends Project {
     private SingleFileProject(Workspace workspace, ProjectEnvironmentBuilder environmentBuilder, Path filePath,
                               BuildOptions buildOptions) {
         super(ProjectKind.SINGLE_FILE_PROJECT, filePath, environmentBuilder, buildOptions, workspace);
-
         try {
             this.targetDir = Files.createTempDirectory("ballerina-cache" + System.nanoTime());
         } catch (IOException e) {
             // ignore
         }
-
         populateCompilerContext();
     }
 
@@ -119,12 +109,12 @@ public class SingleFileProject extends Project {
                 file.toAbsolutePath().normalize().toString())) {
             throw new ProjectException("'" + file + "' does not belong to the current project");
         }
-        return this.currentPackage().getDefaultModule().documentIds().iterator().next();
+        return this.workspace().packages().get(0).getDefaultModule().documentIds().iterator().next();
     }
 
     @Override
     public Optional<Path> documentPath(DocumentId documentId) {
-        if (this.currentPackage().getDefaultModule().documentIds().iterator().next().equals(documentId)) {
+        if (this.workspace().packages().get(0).getDefaultModule().documentIds().iterator().next().equals(documentId)) {
             return Optional.of(sourceRoot.toAbsolutePath());
         }
         return Optional.empty();

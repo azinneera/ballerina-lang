@@ -29,6 +29,7 @@ import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.projects.Workspace;
+import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.internal.BalaFiles;
 import io.ballerina.projects.internal.PackageConfigCreator;
 import io.ballerina.projects.repos.TempDirCompilationCache;
@@ -55,19 +56,13 @@ public class BalaProject extends Project {
      * @return bala project
      */
     public static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath) {
-        PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
-        BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, BuildOptions.builder().setSticky(true)
-                .build(), null);
-        balaProject.addPackage(packageConfig);
-        return balaProject;
+        return loadProject(environmentBuilder, balaPath, BuildOptions.builder().setSticky(true).build());
     }
 
     public static BalaProject loadProject(ProjectEnvironmentBuilder environmentBuilder, Path balaPath,
                                           BuildOptions buildOptions) {
-        PackageConfig packageConfig = PackageConfigCreator.createBalaProjectConfig(balaPath);
-        BalaProject balaProject = new BalaProject(environmentBuilder, balaPath, buildOptions, null);
-        balaProject.addPackage(packageConfig);
-        return balaProject;
+        Workspace workspace = Workspace.load(balaPath, environmentBuilder, buildOptions);
+        return (BalaProject) workspace.packages().get(0).project();
     }
 
     public static BalaProject loadProject(Workspace workspace, ProjectEnvironmentBuilder environmentBuilder,
