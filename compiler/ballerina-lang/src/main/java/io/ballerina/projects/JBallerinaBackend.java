@@ -381,7 +381,7 @@ public class JBallerinaBackend extends CompilerBackend {
         } catch (IOException e) {
             throw new ProjectException("Failed to cache generated jar, module: " + moduleContext.moduleName());
         }
-        if (moduleContext.workspace().getPackage(packageContext.descriptor()).packageContext() == packageContext &&
+        if (moduleContext.project().currentPackage().packageContext() == packageContext &&
                 moduleContext.isDefaultModule()) {
             cacheResources(compilationCache, moduleContext.project().buildOptions().skipTests());
         }
