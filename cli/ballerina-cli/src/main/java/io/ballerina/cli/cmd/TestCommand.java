@@ -54,9 +54,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Objects;
 
 import static io.ballerina.cli.cmd.Constants.TEST_COMMAND;
 import static io.ballerina.cli.launcher.LauncherUtils.createLauncherException;
@@ -417,7 +417,8 @@ public class TestCommand implements BLauncherCmd {
         // which has the newly generated code for code coverage calculation.
         // Hence, below tasks are executed before extracting the module map from the project.
         TaskExecutor preBuildTaskExecutor = new TaskExecutor.TaskBuilder()
-                .addTask(new CleanTargetCacheDirTask(), !rebuildStatus || skip) // clean the target cache dir(projects only)
+                .addTask(new CleanTargetCacheDirTask(),
+                        !rebuildStatus || skip) // clean the target cache dir(projects only)
                 .addTask(new CleanTargetBinTestsDirTask(), !rebuildStatus || (skip || !isTestingDelegated))
                 .addTask(new RunBuildToolsTask(outStream), !rebuildStatus || skip) // run build tools
                 .build();
@@ -466,7 +467,7 @@ public class TestCommand implements BLauncherCmd {
             if (buildJson.isExpiredLastUpdateTime()) {
                 return true;
             }
-            if (CommandUtil.isFilesModifiedSinceLastBuild(buildJson, project, true)) {
+            if (CommandUtil.isFilesModifiedSinceLastBuild(buildJson, project, true, true)) {
                 return true;
             }
             if (isRebuildForCurrCmd()) {
